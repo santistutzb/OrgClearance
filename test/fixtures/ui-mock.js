@@ -1,0 +1,52 @@
+// Mock chrome API + realistic data for screenshots.
+window.__sent = [];
+const ana = { id: "005A", name: "Ana Ruiz", username: "ana.ruiz@acme.com", isActive: true, profileName: "Sales User", roleName: "Sales Rep West" };
+const bob = { id: "005B", name: "Bruno Pérez", username: "bruno.perez@acme.com", isActive: true, profileName: "Sales User", roleName: "Sales Manager" };
+const R = {
+  resolveObject: "Account",
+  listFields: [{ name: "Industry", label: "Industry" }, { name: "AnnualRevenue", label: "Annual Revenue" }],
+  searchUsers: [ana, bob, { id: "005C", name: "Ana Torres", username: "atorres@acme.com", isActive: false, profileName: "Support", roleName: null }],
+  explain: (m) => m.params.userId === "005A" ? {
+    user: ana, sobject: "Account", field: "AnnualRevenue",
+    verdict: { status: "no", reasons: ["No profile or permission set grants read on field AnnualRevenue.", "Sharing doesn't give access to this record."] },
+    object: { status: "yes", readBy: [{ kind: "profile", label: "Sales User" }], createBy: [{ label: "Sales User" }], editBy: [{ label: "Sales User" }], deleteBy: [], viewAllBy: [], modifyAllBy: [], muted: [] },
+    fieldAccess: { status: "no", readBy: [], muted: [{ group: "Finance Bundle", components: ["Revenue Fields"], outdated: false }] },
+    record: { status: "no", maxAccessLevel: "None", owd: { audience: "internal", label: "Private" }, reasons: [], notes: [] },
+    sources: [{ kind: "profile", label: "Sales User" }, { kind: "permset", label: "Lightning Console" }, { kind: "group", label: "Finance Bundle", via: [] }], expired: [{ label: "Q3 Temp Access" }],
+  } : {
+    user: bob, sobject: "Account", field: "AnnualRevenue", verdict: { status: "yes", reasons: [] },
+    object: { status: "yes", readBy: [{ kind: "profile", label: "Sales User" }], createBy: [], editBy: [], deleteBy: [], viewAllBy: [], modifyAllBy: [] },
+    fieldAccess: { status: "yes", readBy: [{ kind: "permset", label: "Revenue Fields" }] },
+    record: { status: "yes", maxAccessLevel: "Read", owd: { audience: "internal", label: "Private" }, reasons: [{ text: "Role Sales Manager is above the owner's role (Sales Rep East)" }, { text: "Sharing rule (Read, via group West Sales)" }], notes: [] },
+    sources: [{ kind: "profile", label: "Sales User" }, { kind: "permset", label: "Revenue Fields" }], expired: [],
+  },
+  fieldMatrix: { user: ana, sobject: "Account", status: "ok", object: { status: "yes" }, fields: [
+    { name: "AnnualRevenue", label: "Annual Revenue", access: "none", readBy: [], editBy: [], muted: true },
+    { name: "Industry", label: "Industry", access: "edit", readBy: ["Sales User"], editBy: ["Sales User"] },
+    { name: "Name", label: "Account Name", access: "always", readBy: [], editBy: [] },
+    { name: "Rating", label: "Rating", access: "read", readBy: ["Sales User"], editBy: [] },
+    { name: "Region__c", label: "Region", access: "read", readBy: ["Lightning Console"], editBy: [] }] },
+  compare: () => ({
+    a: { user: ana, object: { status: "yes" }, fieldAccess: { status: "no" }, record: { status: "no" } },
+    b: { user: bob, object: { status: "yes" }, fieldAccess: { status: "yes" }, record: { status: "yes" } },
+    differences: [
+      { check: "Field", a: "no", b: "yes", explanation: "Bruno Pérez gets it from Revenue Fields, which Ana Ruiz doesn't have." },
+      { check: "Record", a: "no", b: "yes", explanation: "Bruno Pérez: Role Sales Manager is above the owner's role (Sales Rep East)." }],
+    onlyA: [{ kind: "permset", label: "Lightning Console" }], onlyB: [{ kind: "permset", label: "Revenue Fields" }], common: [{ kind: "profile", label: "Sales User" }],
+  }),
+  timeline: { events: [
+    { at: "2026-11-16T14:20:00Z", who: "Bruno Pérez", kind: "field", text: "Rating: Warm → Hot" },
+    { at: "2026-11-12T10:05:00Z", who: "Ana Ruiz", kind: "activity", text: "Call: Pricing follow-up [Completed]" },
+    { at: "2026-11-02T09:00:00Z", who: "Ana Ruiz", kind: "field", text: "Industry: (empty) → Retail" },
+    { at: "2026-10-30T16:45:00Z", who: "Integration User", kind: "created", text: "Record created" }], notes: ["Changes are only recorded for fields with history tracking turned on."] },
+  scanLogs: { scanned: 20, failed: 0, matches: [{ at: "2026-11-16T14:20:00Z", user: "Bruno Pérez", operation: "/aura", status: "Success", flows: ["Account: Set Region"], triggers: ["AccountTrigger on Account trigger event BeforeUpdate"], validations: ["Revenue_Positive"], failures: [], errors: [] }] },
+};
+const store = { "recent:acme.my.salesforce.com": [ana, bob] };
+window.chrome = {
+  runtime: {
+    lastError: null, id: "x", getURL: (p) => new URL("../orgclearance/" + p, location.href).href,
+    onMessage: { addListener() {} }, openOptionsPage() {},
+    sendMessage: (m, cb) => { window.__sent.push(m); const r = R[m.type]; setTimeout(() => cb({ ok: true, data: typeof r === "function" ? r(m) : r, meta: { calls: 9, cached: 2, orgUsage: "api-usage=1840/15000" } }), 60); },
+  },
+  storage: { local: { get: async (k) => (k in store ? { [k]: store[k] } : {}), set: async (o) => Object.assign(store, o) } },
+};
