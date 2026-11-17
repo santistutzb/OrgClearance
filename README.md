@@ -48,7 +48,7 @@ Authorization code flow with PKCE, no client secret. The access token is kept in
 
 | Where | Function | Question it answers | Output |
 |---|---|---|---|
-| Panel | Explain | Can this user see this record or field, and why? | Verdict, reasons, who grants each permission |
+| Panel | Explain | Can this user see this record or field, and why? How do I fix it? | Verdict, reasons, who grants each permission, suggested fixes, text for a ticket |
 | Panel | Fields | What can this user do with each field of this object? | Table per field, filterable |
 | Panel | Compare | Why does one user see it and the other doesn't? | Side-by-side and the source that makes the difference |
 | Panel | History | What happened to this record and who did it? | Timeline; debug log scan for flows/triggers/validations |
@@ -74,6 +74,8 @@ Authorization code flow with PKCE, no client secret. The access token is kept in
   - role above the owner's role
   - View All Data / Modify All Data / View All / Modify All bypass
 - If access is granted but nothing checked explains it, it says so instead of inventing a reason.
+- **How to fix it** (when the answer is no): read-only suggestions for the smallest change, grouped by problem (object, field, record), each with a link to the right Setup page. In order: reactivate the user, renew an expired assignment, stop muting or recalculate a permission set group, assign a permission set that already grants it (with how many people use it), add the permission to a set they already have, share the record, give them a role, or add a sharing rule. OrgClearance never makes the change.
+- **Copy for a ticket**: copies the result, reasons, details and suggested fix as plain text, to paste into a ticket or a reply.
 
 **Fields**: every field on the object with the user's access (Edit / Read / None / Always) and where it comes from. Filter by name and access level.
 
@@ -120,6 +122,8 @@ Authorization code flow with PKCE, no client secret. The access token is kept in
 | `src/resolve.js` | Picks the org and credentials (cookie or OAuth) for each request. |
 | `src/auth.js` | Per-org auth settings and OAuth (PKCE). |
 | `src/user.js` | User overview. |
+| `src/suggest.js` | Fix suggestions for a blocked access check. |
+| `src/ticket.js` | Plain-text summary for tickets; groups suggestions by problem. |
 | `src/session.js` | Finds browser sessions (`sid` cookies on API domains). |
 | `src/api.js` | REST client (GET only): pagination, describe cache, call counter, chunked `IN` queries. |
 | `src/access.js` | Explain, Fields and Compare logic. |
@@ -130,7 +134,7 @@ Authorization code flow with PKCE, no client secret. The access token is kept in
 
 ## Status: not yet tested against a real org
 
-The logic passes 42 tests against simulated data, 2 UI tests render every tab with all sections expanded and fail on broken text, the code type-checks clean, and the panel, workspace and settings were smoke-tested in a simulated DOM,
+The logic passes 52 tests against simulated data, 2 UI tests render every tab with all sections expanded and fail on broken text, the code type-checks clean, and the panel, workspace and settings were smoke-tested in a simulated DOM,
 but **it hasn't run against Salesforce yet**. Validate in a Developer Org first. Things to watch:
 
 - `session.js` finding the cookie on your domain type (sandbox, Developer Edition, Enhanced Domains).

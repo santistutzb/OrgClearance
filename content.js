@@ -57,6 +57,13 @@
     .timeline .when { color: var(--muted); font-size: 12px; }
     .timeline .who { color: var(--muted); font-size: 12px; }
     .log { border-left: 3px solid var(--brand); padding: 6px 10px; margin-top: 10px; font-size: 13px; background: var(--wash); border-radius: 0; }
+    .fixes ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
+    .fixgroup { margin-top: 14px; font-weight: 700; font-size: 13px; color: var(--muted); }
+    .fixes li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-control); }
+    .fixes .title { font-weight: 700; }
+    .fixes a { color: var(--brand); font-weight: 700; text-decoration: none; display: inline-flex; gap: 4px; align-items: center; margin-top: 4px; }
+    .fixes a .ic { width: 14px; height: 14px; vertical-align: 0; }
+    .fixes a:hover { text-decoration: underline; }
     .diffs { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 10px; }
     .diffs li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-control); }
     .diffs .title { font-weight: 700; }
@@ -132,6 +139,42 @@
       h("div", { class: "who" }, h("div", { class: "name" }, u.name + (u.isActive === false ? " (inactive)" : "")), h("div", { class: "sub" }, userLine(u))));
   }
 
+  // Copies the plain-text summary for a ticket or a reply to the person who asked.
+  function copyButton(text) {
+    if (!text) return null;
+    const label = h("span", {}, "Copy for a ticket");
+    const btn = h("button", { class: "btn btn-secondary btn-small", title: "Copies the result, the reasons and the suggested fix as plain text" }, icon("copy"), label);
+    btn.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(text); }
+      catch {
+        // Fallback when the page doesn't grant clipboard access.
+        const ta = h("textarea", { style: "position:fixed;opacity:0" }); ta.value = text;
+        root.append(ta); ta.select(); document.execCommand("copy"); ta.remove();
+      }
+      label.textContent = "Copied";
+      setTimeout(() => { label.textContent = "Copy for a ticket"; }, 2000);
+    });
+    return btn;
+  }
+
+  const FIX_ICON = { assign: "user", edit: "fields", unmute: "shield", renew: "clock", share: "compare", role: "user", rule: "settings", activate: "user" };
+  function fixes(r) {
+    if (!r.suggestions?.length && !r.suggestionNotes?.length) return null;
+    const groups = r.fixGroups?.length ? r.fixGroups : [{ key: "all", title: "", items: r.suggestions ?? [] }];
+    const many = groups.length > 1;
+    const item = (x) => h("li", {},
+      h("span", { class: "dot s-read" }, icon(FIX_ICON[x.kind] ?? "check")),
+      h("div", {}, h("div", { class: "title" }, x.title), h("div", { class: "muted small" }, x.detail),
+        x.url ? h("a", { href: x.url, target: "_blank", rel: "noopener", class: "small" }, "Open in Salesforce ", icon("external")) : null));
+    return h("section", { class: "fixes", "aria-label": "How to fix it" },
+      h("h3", {}, "How to fix it"),
+      h("p", { class: "muted small", style: "margin-top:0" }, many
+        ? `There are ${groups.length} separate problems. Each one needs one of its options. OrgClearance only suggests; it doesn't change anything.`
+        : "Pick the option that fits. OrgClearance only suggests; it doesn't change anything."),
+      groups.filter((g) => g.items.length).map((g) => [many ? h("div", { class: "fixgroup" }, g.title) : null, h("ul", {}, g.items.map(item))]),
+      notes(r.suggestionNotes));
+  }
+
   // For a "yes", say in one line what gives them access, so the answer stands on its own.
   function whyYes(r) {
     const parts = [];
@@ -151,6 +194,8 @@
         h("div", { class: "answer" }, statusDot(v.status), h("span", {}, answer)),
         v.reasons.length ? h("ul", {}, v.reasons.map((x) => h("li", {}, x))) : null,
         v.status === "yes" ? whyYes(r) : null),
+      h("div", { class: "row", style: "margin-top:10px" }, copyButton(r.ticket)),
+      fixes(r),
       h("div", { class: "checks" }, objectRow(r), fieldRow(r), recordRow(r),
         h("details", { class: "check" },
           h("summary", {}, h("span", { class: "dot s-na" }, icon("user")),
