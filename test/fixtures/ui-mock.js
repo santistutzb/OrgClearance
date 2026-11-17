@@ -13,6 +13,20 @@ const R = {
     fieldAccess: { status: "no", readBy: [], muted: [{ group: "Finance Bundle", components: ["Revenue Fields"], outdated: false }] },
     record: { status: "no", maxAccessLevel: "None", owd: { audience: "internal", label: "Private" }, reasons: [], notes: [] },
     sources: [{ kind: "profile", label: "Sales User" }, { kind: "permset", label: "Lightning Console" }, { kind: "group", label: "Finance Bundle", via: [] }], expired: [{ label: "Q3 Temp Access" }],
+    suggestions: [
+      { kind: "unmute", title: "Stop muting AnnualRevenue in Finance Bundle", detail: "Revenue Fields inside the group grants it, but the group's muting permission set removes it. Only change this if the mute isn't intentional.", url: "https://acme.lightning.force.com/lightning/setup/PermSetGroups/page?address=%2F0PG1" },
+      { kind: "edit", title: "Or give read on AnnualRevenue in Lightning Console", detail: "They already have this permission set. Everyone else assigned to it gets the same access.", url: "https://acme.lightning.force.com/lightning/setup/PermSets/page?address=%2F0PS2" },
+      { kind: "share", title: "Share this record with them", detail: "Use Sharing on the record. Quickest for one record; it doesn't cover similar records.", url: "https://acme.lightning.force.com/lightning/r/001000000000001AAA/view" },
+      { kind: "rule", title: "For all similar records, add a sharing rule on Account", detail: "Share by owner or by criteria with a public group or role they belong to.", url: null }],
+    suggestionNotes: [],
+    fixGroups: [
+      { key: "field", title: "Read on the AnnualRevenue field", items: [
+        { kind: "unmute", title: "Stop muting AnnualRevenue in Finance Bundle", detail: "Revenue Fields inside the group grants it, but the group's muting permission set removes it. Only change this if the mute isn't intentional.", url: "https://acme.lightning.force.com/lightning/setup/PermSetGroups/page?address=%2F0PG1" },
+        { kind: "edit", title: "Or give read on AnnualRevenue in Lightning Console", detail: "They already have this permission set. Everyone else assigned to it gets the same access.", url: "https://acme.lightning.force.com/lightning/setup/PermSets/page?address=%2F0PS2" }] },
+      { key: "record", title: "Access to this record", items: [
+        { kind: "share", title: "Share this record with them", detail: "Use Sharing on the record. Quickest for one record; it doesn't cover similar records.", url: "https://acme.lightning.force.com/lightning/r/001000000000001AAA/view" },
+        { kind: "rule", title: "For all similar records, add a sharing rule on Account", detail: "Share by owner or by criteria with a public group or role they belong to.", url: null }] }],
+    ticket: "Access check: Ana Ruiz (ana.ruiz@acme.com) on the AnnualRevenue field on Account 001000000000001AAA\nResult: Can't see it",
   } : {
     user: bob, sobject: "Account", field: "AnnualRevenue", verdict: { status: "yes", reasons: [] },
     object: { status: "yes", readBy: [{ kind: "profile", label: "Sales User" }], createBy: [], editBy: [], deleteBy: [], viewAllBy: [], modifyAllBy: [] },

@@ -5,6 +5,8 @@
 // Golden rule: if a piece of data couldn't be fetched, the status is "unknown". Never guess.
 
 import { queryIn } from "./api.js";
+// Circular with suggest.js (it uses attempt from here); safe because both only call each other at runtime.
+import { suggestFixes } from "./suggest.js";
 
 const ID_RE = /^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$/;
 const NAME_RE = /^[A-Za-z0-9_]+$/;
@@ -357,6 +359,14 @@ export async function explainAccess(client, { userId, sobject, recordId, field }
     : { status: "skipped" };
 
   result.verdict = buildVerdict(result);
+
+  // Read-only suggestions for the smallest change that would give access.
+  result.suggestions = [];
+  if (result.verdict.status === "no") {
+    const fix = await attempt(() => suggestFixes(client, { result, src }));
+    if (fix.ok) { result.suggestions = fix.value.suggestions; result.suggestionNotes = fix.value.notes; }
+    else result.suggestionNotes = [`Couldn't work out a fix: ${fix.error}`];
+  }
   return result;
 }
 

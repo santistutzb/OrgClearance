@@ -7,6 +7,7 @@ import { resolveSession, listKnownOrgs, forgetOAuthToken, isAuthError, isApiBloc
 import { orgIdOf, getSession } from "./src/session.js";
 import { searchUsers, explainAccess, compareUsers, fieldMatrix, resolveObject } from "./src/access.js";
 import { userOverview } from "./src/user.js";
+import { formatTicket, problemGroups } from "./src/ticket.js";
 import { runAudit } from "./src/audit.js";
 import { collectObjectDoc, toMarkdown, toHtml, toMermaid } from "./src/docs.js";
 import { snapshot, diffSnapshots, toMarkdownReport } from "./src/orgdiff.js";
@@ -17,7 +18,7 @@ const EXT_ORIGIN = chrome.runtime.getURL("");
 // Handlers get (client, message, session). `pages` says who may call them.
 const handlers = {
   searchUsers: { pages: "any", run: (c, m) => searchUsers(c, m.term) },
-  explain: { pages: "panel", run: (c, m) => explainAccess(c, m.params) },
+  explain: { pages: "panel", run: async (c, m) => { const r = await explainAccess(c, m.params); return { ...r, fixGroups: problemGroups(r), ticket: formatTicket(r) }; } },
   compare: { pages: "panel", run: (c, m) => compareUsers(c, m.params) },
   fieldMatrix: { pages: "panel", run: (c, m) => fieldMatrix(c, m.params) },
   resolveObject: { pages: "panel", run: (c, m) => resolveObject(c, m.recordId) },

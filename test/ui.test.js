@@ -58,6 +58,13 @@ test("panel: every tab renders clean text with all sections expanded", async () 
     v.querySelector(".btn-primary").click(); await tick();
     v.querySelectorAll("details").forEach((d) => { d.open = true; });
     assert.ok(v.querySelector(".pass"), "result card rendered");
+    if (userIndex === 0) {
+      assert.equal(v.querySelectorAll(".fixes li").length, 4, "fix suggestions rendered");
+      assert.equal(v.querySelectorAll(".fixgroup").length, 2, "grouped by problem");
+      assert.ok([...v.querySelectorAll("button")].some((b) => b.textContent.includes("Copy for a ticket")), "copy button rendered");
+    } else {
+      assert.equal(v.querySelector(".fixes"), null, "no fix section when they can see it");
+    }
     assert.deepEqual(badText(v), [], `Explain (user ${userIndex})`);
   }
 
