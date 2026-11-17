@@ -7,6 +7,7 @@
 import { queryIn } from "./api.js";
 // Circular with suggest.js (it uses attempt from here); safe because both only call each other at runtime.
 import { suggestFixes } from "./suggest.js";
+import { screenCheck } from "./screen.js";
 
 const ID_RE = /^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$/;
 const NAME_RE = /^[A-Za-z0-9_]+$/;
@@ -26,11 +27,11 @@ export async function attempt(fn) {
 // Users
 // ---------------------------------------------------------------------------
 
-const USER_FIELDS = "Id, Name, Username, IsActive, UserType, UserRoleId, UserRole.Name, Profile.Name";
+const USER_FIELDS = "Id, Name, Username, IsActive, UserType, UserRoleId, UserRole.Name, ProfileId, Profile.Name";
 const mapUser = (u) => ({
   id: u.Id, name: u.Name, username: u.Username, isActive: u.IsActive,
   userType: u.UserType ?? null, roleId: u.UserRoleId ?? null,
-  roleName: u.UserRole?.Name ?? null, profileName: u.Profile?.Name ?? null,
+  roleName: u.UserRole?.Name ?? null, profileName: u.Profile?.Name ?? null, profileId: u.ProfileId ?? null,
 });
 
 export async function searchUsers(client, term) {
@@ -354,6 +355,13 @@ export async function explainAccess(client, { userId, sobject, recordId, field }
 
   result.object = await objectCheck(client, src, sobject);
   result.fieldAccess = field ? await fieldCheck(client, src, sobject, field) : { status: "skipped" };
+  // Is the field on the page they get? Only asked about a specific field.
+  if (field && result.fieldAccess.status !== "unknown") {
+    const sc = await attempt(() => screenCheck(client, { user, sobject, recordId, field: field }));
+    result.screen = sc.ok ? sc.value : { status: "unknown", error: sc.error };
+  } else {
+    result.screen = { status: "skipped" };
+  }
   result.record = recordId
     ? await recordCheck(client, { user, src, sobject, recordId, objectInfo: result.object })
     : { status: "skipped" };
@@ -390,6 +398,14 @@ export function buildVerdict(r) {
     }
   }
   const unknown = checks.filter(([, c]) => c.status === "unknown");
+
+  // Not on their page: data access may be fine, but the record page won't show the field.
+  if (r.screen?.status === "no") {
+    const where = r.screen.layout ? ` (${r.screen.layout.name})` : "";
+    reasons.push(reasons.length
+      ? `It also isn't on their page layout${where}.`
+      : `They have access to ${r.field}, but it isn't on their page layout${where}, so the record page doesn't show it.`);
+  }
 
   if (reasons.length) {
     if (r.expired?.length) reasons.push(`Expired assignments, not counted: ${r.expired.map((s) => s.label).join(", ")}.`);
