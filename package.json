@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/access.test.js test/features.test.js test/platform.test.js test/suggest.test.js test/screen.test.js test/ui.test.js",
+    "test": "node --test test/access.test.js test/features.test.js test/platform.test.js test/suggest.test.js test/screen.test.js test/who.test.js test/ui.test.js",
     "typecheck": "tsc -p tsconfig.json",
     "check": "npm run typecheck && npm test"
   },

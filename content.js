@@ -6,7 +6,7 @@
   if (window.top !== window || document.getElementById("orgclearance-root")) return;
   const {
     h, icon, logo, CSS, fontFaceCss, STATUS, ACCESS, makeSend, run, empty, notes, errorBox, statusPill, statusDot,
-    sourceList, labels, avatar, userLine, checkRow, orgKey, userPicker, tabs,
+    sourceList, labels, avatar, userLine, checkRow, orgKey, userPicker, tabs, download, toCsv, stamp,
   } = globalThis.OrgClearanceUI;
 
   const send = makeSend();
@@ -61,6 +61,12 @@
     a.inline { color: var(--brand); font-weight: 700; text-decoration: none; display: inline-flex; gap: 3px; align-items: center; }
     a.inline .ic { width: 13px; height: 13px; vertical-align: 0; }
     a.inline:hover { text-decoration: underline; }
+    .summary { display: flex; gap: 10px; align-items: baseline; margin-top: 18px; font-size: 15px; }
+    .summary .big { font-size: 28px; font-weight: 700; color: var(--brand); line-height: 1; }
+    .people { list-style: none; padding: 0; margin: 12px 0 0; }
+    .people li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .people .who { min-width: 0; } .people .name { font-weight: 700; }
+    .tabs button { padding: 7px 6px; }
     .fixgroup { margin-top: 14px; font-weight: 700; font-size: 13px; color: var(--muted); }
     .fixes li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-control); }
     .fixes .title { font-weight: 700; }
@@ -314,6 +320,57 @@
     ];
   }
 
+  // ---------- Who ----------
+
+  const wh = { field: fieldInput(), out: h("div"), data: null };
+  wh.record = h("input", { type: "checkbox", id: "oc-who-record", style: "width:auto;margin:0" });
+  wh.btn = h("button", { class: "btn btn-primary", disabled: true }, icon("user"), "Find who can see it");
+  wh.filter = h("input", { type: "search", placeholder: "Filter by name, username or profile", "aria-label": "Filter people" });
+  wh.filterBox = h("div", { class: "search", hidden: true, style: "margin-top:14px" }, icon("search"), wh.filter);
+  wh.btn.addEventListener("click", () => run(send, wh.btn, wh.out, async () => {
+    wh.data = await send({ type: "whoCanSee", params: {
+      sobject: state.ctx.sobject, field: wh.field.value.trim() || null, recordId: state.ctx.recordId, checkRecord: wh.record.checked } });
+    wh.filterBox.hidden = !wh.data.users.length;
+    return renderWho();
+  }, wh.record.checked ? "Finding people, then checking this record for each one…" : "Finding everyone with access…"));
+  wh.filter.addEventListener("input", () => { if (wh.data) wh.out.querySelector(".people")?.replaceWith(peopleList()); });
+  const whoEmpty = () => empty("user", "Find everyone who can see this", "Lists every active person who can read this object, or a field you name, and the permission that gives it to them. Useful for audits and before changing a permission.");
+  wh.out.append(whoEmpty());
+  const whoView = h("div", { hidden: true },
+    h("p", { class: "lead" }, "Who can see this object, one of its fields, or this record?"),
+    fieldLabel(), wh.field,
+    h("label", { for: "oc-who-record", class: "row", style: "font-weight:400;gap:8px;margin-top:12px" }, wh.record, "Also check this record, person by person (up to 100 people)"),
+    wh.btn, wh.out);
+
+  function peopleList() {
+    const q = wh.filter.value.trim().toLowerCase();
+    const rows = wh.data.users.filter((u) => !q || [u.name, u.username, u.profileName].some((x) => String(x || "").toLowerCase().includes(q)));
+    return h("ul", { class: "people" }, rows.length ? rows.map((u) => h("li", {}, avatar(u.name),
+      h("div", { class: "who" }, h("div", { class: "name" }, u.name, u.userType && u.userType !== "Standard" ? h("span", { class: "muted small" }, ` (${u.userType})`) : null),
+        h("div", { class: "muted small" }, [u.username, u.profileName].filter(Boolean).join(", ")),
+        h("div", { class: "small" }, `${wh.data.field ? "Field from " : "Read from "}${(wh.data.field && u.fieldVia.length ? u.fieldVia : u.objectVia).join("; ")}`),
+        u.recordAccess ? h("div", { class: "small" }, `Record access: ${u.recordAccess}`) : null)))
+      : h("li", { class: "muted" }, "Nobody matches this filter."));
+  }
+
+  function renderWho() {
+    const d = wh.data;
+    const what = d.field ? `the ${d.field} field` : `${d.sobject} records`;
+    const scope = d.record.status === "checked" ? " and this record" : "";
+    const csv = () => download(root, `who-can-see-${d.sobject}${d.field ? `-${d.field}` : ""}-${stamp()}.csv`,
+      toCsv(["Name", "Username", "Profile", "User type", "Object read from", "Field read from", "Record access"],
+        d.users.map((u) => [u.name, u.username, u.profileName ?? "", u.userType ?? "", u.objectVia.join("; "), u.fieldVia.join("; "), u.recordAccess ?? ""])), "text/csv");
+    return [
+      h("div", { class: "summary" }, h("span", { class: "big" }, String(d.total)),
+        h("span", {}, `${d.total === 1 ? "person" : "people"} can see ${what}${scope}.`)),
+      d.record.status === "checked" ? h("p", { class: "muted small" }, `Checked this record for ${d.record.checked} ${d.record.checked === 1 ? "person" : "people"} with permission.`) : null,
+      d.users.length ? h("div", { class: "row" }, h("button", { class: "btn btn-secondary btn-small", onclick: csv }, icon("download"), "Download CSV")) : null,
+      d.users.length ? wh.filterBox : null,
+      d.users.length ? peopleList() : empty("user", "Nobody can see it", "No active user has a profile or permission set that grants this."),
+      notes(d.notes),
+    ];
+  }
+
   // ---------- History ----------
 
   const hi = { out: h("div"), logsOut: h("div") };
@@ -356,8 +413,8 @@
 
   // ---------- shell ----------
 
-  const views = { Explain: explainView, Fields: fieldsView, Compare: compareView, History: historyView };
-  const { nav } = tabs(views, {}, { Explain: "shield", Fields: "fields", Compare: "compare", History: "clock" });
+  const views = { Explain: explainView, Fields: fieldsView, Compare: compareView, Who: whoView, History: historyView };
+  const { nav } = tabs(views, {}, { Explain: "shield", Fields: "fields", Compare: "compare", Who: "user", History: "clock" });
   const ctxEl = h("div", { class: "ctx" });
   const panel = h("div", { class: "panel", hidden: true, role: "dialog", "aria-label": "OrgClearance" },
     h("header", {},
@@ -398,6 +455,7 @@
       ex.out.replaceChildren(explainEmpty());
       fm.out.replaceChildren(fieldsEmpty());
       cp.out.replaceChildren(compareEmpty());
+      wh.out.replaceChildren(whoEmpty()); wh.filterBox.hidden = true; wh.data = null;
       [hi.out, hi.logsOut].forEach((o) => o.replaceChildren());
       fm.data = null;
       fm.filters.hidden = true;
@@ -408,6 +466,6 @@
   }
   function refreshButtons() {
     [ex.picker, fm.picker, cp.a].forEach((p) => p.onChange());
-    hi.btn.disabled = hi.logsBtn.disabled = !state.ctx;
+    hi.btn.disabled = hi.logsBtn.disabled = wh.btn.disabled = !state.ctx;
   }
 })();

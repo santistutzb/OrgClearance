@@ -50,6 +50,7 @@ Authorization code flow with PKCE, no client secret. The access token is kept in
 |---|---|---|---|
 | Panel | Explain | Can this user see this record or field, and why? How do I fix it? | Verdict, reasons, who grants each permission, suggested fixes, text for a ticket |
 | Panel | Fields | What can this user do with each field of this object? | Table per field, filterable |
+| Panel | Who | Who can see this object, field or record? | Every active person with access and the permission behind it; CSV |
 | Panel | Compare | Why does one user see it and the other doesn't? | Side-by-side and the source that makes the difference |
 | Panel | History | What happened to this record and who did it? | Timeline; debug log scan for flows/triggers/validations |
 | Workspace | User | What can this user do in the whole org? | System permissions, object access, groups, queues, role; CSV |
@@ -81,6 +82,8 @@ Authorization code flow with PKCE, no client secret. The access token is kept in
 **Fields**: every field on the object with the user's access (Edit / Read / None / Always) and where it comes from. Filter by name and access level.
 
 **Compare**: two users side by side on the same record and field, the differences, and the permission sources only one of them has ("Ana gets it from Group A, which Bob doesn't have").
+
+**Who**: the reverse of Explain. Every active person who can read this object or a field you name, and the profile, permission set or group that gives it to them (View All Data included, expired assignments left out). Optionally checks this record too, one person at a time, up to 100 people; above that it says so instead of returning a partial list. Filterable, with CSV export.
 
 **History**: what happened to the record and who did it:
 - Created / last modified, field history (tracked fields only), tasks, calls, events and emails, newest first.
@@ -124,6 +127,7 @@ Authorization code flow with PKCE, no client secret. The access token is kept in
 | `src/auth.js` | Per-org auth settings and OAuth (PKCE). |
 | `src/user.js` | User overview. |
 | `src/screen.js` | Whether a field is on the page layout and Lightning pages the user gets. |
+| `src/who.js` | Who can see an object, field or record. |
 | `src/suggest.js` | Fix suggestions for a blocked access check. |
 | `src/ticket.js` | Plain-text summary for tickets; groups suggestions by problem. |
 | `src/session.js` | Finds browser sessions (`sid` cookies on API domains). |
@@ -136,7 +140,7 @@ Authorization code flow with PKCE, no client secret. The access token is kept in
 
 ## Status: not yet tested against a real org
 
-The logic passes 62 tests against simulated data, 2 UI tests render every tab with all sections expanded and fail on broken text, the code type-checks clean, and the panel, workspace and settings were smoke-tested in a simulated DOM,
+The logic passes 69 tests against simulated data, 2 UI tests render every tab with all sections expanded and fail on broken text, the code type-checks clean, and the panel, workspace and settings were smoke-tested in a simulated DOM,
 but **it hasn't run against Salesforce yet**. Validate in a Developer Org first. Things to watch:
 
 - `session.js` finding the cookie on your domain type (sandbox, Developer Edition, Enhanced Domains).
