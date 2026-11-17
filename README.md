@@ -74,7 +74,8 @@ Authorization code flow with PKCE, no client secret. The access token is kept in
   - role above the owner's role
   - View All Data / Modify All Data / View All / Modify All bypass
 - If access is granted but nothing checked explains it, it says so instead of inventing a reason.
-- **How to fix it** (when the answer is no): read-only suggestions for the smallest change, grouped by problem (object, field, record), each with a link to the right Setup page. In order: reactivate the user, renew an expired assignment, stop muting or recalculate a permission set group, assign a permission set that already grants it (with how many people use it), add the permission to a set they already have, share the record, give them a role, or add a sharing rule. OrgClearance never makes the change.
+- **On their page** (when you name a field): finds the page layout their profile gets for this record's record type and checks the field is on it (and whether it's read-only), plus the object's Lightning record pages: whether they show the layout or use Dynamic Forms, and whether the field is there or behind a visibility rule. "Has access but isn't on their layout" counts as can't see. If Dynamic Forms pages disagree with the layout it says it depends on which page they get, because page assignments by app and profile aren't resolved.
+- **How to fix it** (when the answer is no): read-only suggestions for the smallest change, grouped by problem (object, field, page, record), each with a link to the right Setup page. In order: reactivate the user, renew an expired assignment, stop muting or recalculate a permission set group, assign a permission set that already grants it (with how many people use it), add the permission to a set they already have, add the field to their page layout or Lightning page, share the record, give them a role, or add a sharing rule. OrgClearance never makes the change.
 - **Copy for a ticket**: copies the result, reasons, details and suggested fix as plain text, to paste into a ticket or a reply.
 
 **Fields**: every field on the object with the user's access (Edit / Read / None / Always) and where it comes from. Filter by name and access level.
@@ -122,6 +123,7 @@ Authorization code flow with PKCE, no client secret. The access token is kept in
 | `src/resolve.js` | Picks the org and credentials (cookie or OAuth) for each request. |
 | `src/auth.js` | Per-org auth settings and OAuth (PKCE). |
 | `src/user.js` | User overview. |
+| `src/screen.js` | Whether a field is on the page layout and Lightning pages the user gets. |
 | `src/suggest.js` | Fix suggestions for a blocked access check. |
 | `src/ticket.js` | Plain-text summary for tickets; groups suggestions by problem. |
 | `src/session.js` | Finds browser sessions (`sid` cookies on API domains). |
@@ -134,7 +136,7 @@ Authorization code flow with PKCE, no client secret. The access token is kept in
 
 ## Status: not yet tested against a real org
 
-The logic passes 52 tests against simulated data, 2 UI tests render every tab with all sections expanded and fail on broken text, the code type-checks clean, and the panel, workspace and settings were smoke-tested in a simulated DOM,
+The logic passes 62 tests against simulated data, 2 UI tests render every tab with all sections expanded and fail on broken text, the code type-checks clean, and the panel, workspace and settings were smoke-tested in a simulated DOM,
 but **it hasn't run against Salesforce yet**. Validate in a Developer Org first. Things to watch:
 
 - `session.js` finding the cookie on your domain type (sandbox, Developer Edition, Enhanced Domains).
@@ -152,7 +154,7 @@ but **it hasn't run against Salesforce yet**. Validate in a Developer Org first.
 - [ ] Duplicate detection ignores field and system permissions.
 - [ ] Role hierarchy only checks "above the owner"; shares granted to subordinates' groups aren't traced.
 - [ ] Custom objects: can't read whether "Grant Access Using Hierarchies" is on, so the hierarchy reason is conditional.
-- [ ] Record visibility on screen: page layouts, record types, Dynamic Forms.
+- [ ] On their page: which Lightning record page a user gets (app, record type and profile assignments) isn't resolved yet.
 - [ ] Lightning only (`/lightning/r/...`). No Classic or console app support.
 - [ ] Setup links assume Lightning and My Domain hosts; flow links need `FlowDefinitionView.ActiveVersionId` (falls back to the Flows list).
 - [ ] Full TypeScript conversion (today: JSDoc + `tsc --checkJs`, no build step).

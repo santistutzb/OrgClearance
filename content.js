@@ -58,6 +58,9 @@
     .timeline .who { color: var(--muted); font-size: 12px; }
     .log { border-left: 3px solid var(--brand); padding: 6px 10px; margin-top: 10px; font-size: 13px; background: var(--wash); border-radius: 0; }
     .fixes ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
+    a.inline { color: var(--brand); font-weight: 700; text-decoration: none; display: inline-flex; gap: 3px; align-items: center; }
+    a.inline .ic { width: 13px; height: 13px; vertical-align: 0; }
+    a.inline:hover { text-decoration: underline; }
     .fixgroup { margin-top: 14px; font-weight: 700; font-size: 13px; color: var(--muted); }
     .fixes li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-control); }
     .fixes .title { font-weight: 700; }
@@ -117,6 +120,26 @@
     ], f.status === "no");
   }
 
+  function screenRow(r) {
+    const c = r.screen;
+    if (!c || c.status === "skipped") return null;
+    const line = c.status === "yes" ? `On their page layout${c.layout ? `: ${c.layout.name}` : ""}`
+      : c.status === "no" ? `Not on their page layout${c.layout ? ` (${c.layout.name})` : ""}`
+      : c.error ? "Couldn't verify" : "Depends on which Lightning page they get";
+    const link = (text, url) => (url ? h("a", { href: url, target: "_blank", rel: "noopener", class: "inline" }, text, icon("external")) : text);
+    return checkRow(c.status, "On their page", line, [
+      c.error && h("p", { class: "muted" }, c.error),
+      c.layout ? h("p", { class: "small" }, "Page layout: ", link(c.layout.name, c.layout.url),
+        c.recordType ? ` (record type ${c.recordType.name})` : "",
+        c.onLayout === true ? `. The field is on it${({ Readonly: ", read-only", Required: ", required" })[c.behavior] ?? ""}.` : c.onLayout === false ? ". The field isn't on it." : ".") : null,
+      c.pages?.length ? [h("div", { class: "muted small" }, "Lightning record pages for this object"),
+        h("ul", {}, c.pages.map((pg) => h("li", {}, link(pg.name, pg.url), ": ",
+          pg.usesDynamicForms ? (pg.hasField ? `has the field${pg.conditional ? " (only when its visibility rule is met)" : ""}` : "uses Dynamic Forms without this field")
+            : pg.usesLayout ? "shows the page layout" : "no record detail on this page")))] : null,
+      notes(c.notes),
+    ], c.status === "no");
+  }
+
   function recordRow(r) {
     const c = r.record;
     if (!c || c.status === "skipped") return null;
@@ -157,7 +180,7 @@
     return btn;
   }
 
-  const FIX_ICON = { assign: "user", edit: "fields", unmute: "shield", renew: "clock", share: "compare", role: "user", rule: "settings", activate: "user" };
+  const FIX_ICON = { layout: "docs", page: "workspace", assign: "user", edit: "fields", unmute: "shield", renew: "clock", share: "compare", role: "user", rule: "settings", activate: "user" };
   function fixes(r) {
     if (!r.suggestions?.length && !r.suggestionNotes?.length) return null;
     const groups = r.fixGroups?.length ? r.fixGroups : [{ key: "all", title: "", items: r.suggestions ?? [] }];
@@ -196,7 +219,7 @@
         v.status === "yes" ? whyYes(r) : null),
       h("div", { class: "row", style: "margin-top:10px" }, copyButton(r.ticket)),
       fixes(r),
-      h("div", { class: "checks" }, objectRow(r), fieldRow(r), recordRow(r),
+      h("div", { class: "checks" }, objectRow(r), fieldRow(r), screenRow(r), recordRow(r),
         h("details", { class: "check" },
           h("summary", {}, h("span", { class: "dot s-na" }, icon("user")),
             h("span", { class: "what" }, h("div", { class: "title" }, "Where their permissions come from"),

@@ -21,6 +21,11 @@ export function formatTicket(r, { date = new Date() } = {}) {
   if (f && f.status !== "skipped") {
     lines.push(`- Field ${r.field}: ${STATUS[f.status]}${f.readBy?.length ? ` (read from ${names(f.readBy)})` : f.status === "no" ? " (field-level security)" : ""}`);
   }
+  const sc = r.screen;
+  if (sc && sc.status !== "skipped") {
+    const where = sc.layout ? ` (layout: ${sc.layout.name}${sc.recordType ? `, record type: ${sc.recordType.name}` : ""})` : "";
+    lines.push(`- On their page: ${STATUS[sc.status]}${where}`);
+  }
   const c = r.record;
   if (c && c.status !== "skipped") {
     const why = c.reasons?.length ? ` (${c.reasons.map((x) => x.text).join("; ")})` : c.owd ? ` (org-wide default: ${c.owd.label})` : "";
@@ -48,7 +53,8 @@ export function problemGroups(r) {
     const key = s.problem ?? "other";
     let g = groups.find((x) => x.key === key);
     if (!g) {
-      const title = key === "object" ? `Read on ${r.sobject}` : key === "field" ? `Read on the ${r.field} field` : key === "record" ? "Access to this record" : PROBLEM_TITLE[key] ?? "Other";
+      const title = key === "object" ? `Read on ${r.sobject}` : key === "field" ? `Read on the ${r.field} field` : key === "screen" ? "Showing the field on their page"
+        : key === "record" ? "Access to this record" : PROBLEM_TITLE[key] ?? "Other";
       g = { key, title, items: [] };
       groups.push(g);
     }

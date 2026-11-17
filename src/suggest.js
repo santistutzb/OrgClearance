@@ -125,6 +125,18 @@ export async function suggestFixes(client, { result, src }) {
       : { problem: "field", kind: "edit", title: `Or create a permission set with read on ${r.field}`, detail: "They have no custom permission sets yet, only their profile.", url: null });
   }
 
+  // Field not on their page.
+  if (r.screen?.status === "no") {
+    const sl = { layouts: lightningBase(host) ? `${lightningBase(host)}/lightning/setup/ObjectManager/${encodeURIComponent(r.sobject)}/PageLayouts/view` : null };
+    if (r.screen.layout) {
+      add({ problem: "screen", kind: "layout", title: `Add ${r.field} to the ${r.screen.layout.name} page layout`, detail: "It's the layout their profile gets for this record type. Everyone using that layout will see the field.", url: r.screen.layout.url });
+    }
+    add({ problem: "screen", kind: "layout", title: "Or assign their profile a page layout that already has it", detail: "Use Page Layout Assignment on this object.", url: sl.layouts });
+    for (const p of (r.screen.pages ?? []).filter((x) => x.usesDynamicForms && !x.hasField).slice(0, 2)) {
+      add({ problem: "screen", kind: "page", title: `Also add it to the ${p.name} Lightning page`, detail: "This page uses Dynamic Forms, so it ignores the page layout's fields.", url: p.url });
+    }
+  }
+
   // Record sharing.
   if (r.record?.status === "no") {
     add({ problem: "record", kind: "share", title: "Share this record with them", detail: "Use Sharing on the record. Quickest for one record; it doesn't cover similar records.",
@@ -138,7 +150,7 @@ export async function suggestFixes(client, { result, src }) {
     }
   }
 
-  const ORDER = ["user", "object", "field", "record"];
+  const ORDER = ["user", "object", "field", "screen", "record"];
   out.sort((a, b) => ORDER.indexOf(a.problem) - ORDER.indexOf(b.problem));
   for (const p of ORDER) {
     const first = out.find((x) => x.problem === p);
