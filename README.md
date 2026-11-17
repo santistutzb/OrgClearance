@@ -153,3 +153,7 @@ but **it hasn't run against Salesforce yet**. Validate in a Developer Org first.
 - [ ] Setup links assume Lightning and My Domain hosts; flow links need `FlowDefinitionView.ActiveVersionId` (falls back to the Flows list).
 - [ ] Full TypeScript conversion (today: JSDoc + `tsc --checkJs`, no build step).
 - [ ] Naming: Salesforce's trademark guidelines don't allow its marks ("Salesforce", "force", "Cloud"...) inside a product name; "for Salesforce" may only appear as a less prominent description.
+
+## License
+
+[MIT](LICENSE). The bundled Atkinson Hyperlegible font is licensed separately under the SIL Open Font License ([`fonts/OFL-LICENSE.txt`](fonts/OFL-LICENSE.txt)).
