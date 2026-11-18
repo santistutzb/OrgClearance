@@ -1,6 +1,10 @@
 // @ts-check
 // Settings: how the extension connects to each org, and shortcuts.
 import { normalizeHost, getAllConfigs, setOrgConfig } from "./src/auth.js";
+import "./i18n.js";
+
+const I18N = globalThis.OrgClearanceI18n;
+const t = (k, v) => I18N.t(k, v);
 
 const { h, icon, logo, CSS, fontFaceCss, makeSend, errorBox, statusPill } = globalThis.OrgClearanceUI;
 const app = document.getElementById("app");
@@ -30,13 +34,13 @@ function testButton(host) {
   const out = h("div", { class: "result" });
   const btn = h("button", { class: "btn btn-secondary btn-small", onclick: async () => {
     btn.disabled = true;
-    out.replaceChildren(h("div", { class: "muted small" }, "Testing the connection. A Salesforce login window may open."));
+    out.replaceChildren(h("div", { class: "muted small" }, t("Testing the connection. A Salesforce login window may open.")));
     try {
       const r = await makeSend()({ type: "testOrg", org: host });
-      out.replaceChildren(h("div", { class: "ok" }, icon("check"), `Connected to ${r.name} (${r.sandbox ? "sandbox" : r.edition}) using ${r.auth === "oauth" ? "OAuth" : "your browser session"}.`));
+      out.replaceChildren(h("div", { class: "ok" }, icon("check"), t(r.auth === "oauth" ? t("Connected to {name} ({kind}) using OAuth.") : t("Connected to {name} ({kind}) using your browser session."), { name: r.name, kind: r.sandbox ? "sandbox" : r.edition })));
     } catch (e) { out.replaceChildren(errorBox(e)); }
     btn.disabled = false;
-  } }, "Test connection");
+  } }, t("Test connection"));
   return { btn, out };
 }
 
@@ -46,54 +50,56 @@ async function render() {
   const hosts = [...new Set([...known.map((o) => o.host), ...Object.keys(configs)])].sort();
 
   const urlInput = h("input", { type: "text", id: "oc-url", placeholder: "https://acme.my.salesforce.com", list: "known-orgs" });
-  const keyInput = h("input", { type: "text", id: "oc-key", placeholder: "Paste the Consumer Key", autocomplete: "off", spellcheck: "false" });
+  const keyInput = h("input", { type: "text", id: "oc-key", placeholder: t("Paste the Consumer Key"), autocomplete: "off", spellcheck: "false" });
   const formErr = h("div");
   const save = h("button", { class: "btn btn-primary", onclick: async () => {
     formErr.replaceChildren();
     try {
       const host = normalizeHost(urlInput.value);
       const clientId = keyInput.value.trim();
-      if (!/^[A-Za-z0-9._]{20,}$/.test(clientId)) throw new Error("That doesn't look like a Consumer Key. Copy it again from the app's settings in Salesforce.");
+      if (!/^[A-Za-z0-9._]{20,}$/.test(clientId)) throw new Error(t("That doesn't look like a Consumer Key. Copy it again from the app's settings in Salesforce."));
       await setOrgConfig(host, { mode: "oauth", clientId });
       await render();
     } catch (e) { formErr.replaceChildren(errorBox(e)); }
-  } }, icon("shield"), "Save and connect with OAuth");
+  } }, icon("shield"), t("Save and connect with OAuth"));
 
   const orgRows = hosts.length ? hosts.map((host) => {
     const cfg = configs[host];
-    const t = testButton(host);
+    const test = testButton(host);
     return h("div", { class: "org" },
       h("div", { class: "host" }, h("div", { class: "api", style: "font-size:13px" }, host),
-        h("div", { class: "muted small" }, cfg?.mode === "oauth" ? "Connects with OAuth" : "Connects with your browser session")),
-      t.btn,
-      cfg ? h("button", { class: "btn btn-ghost btn-small", onclick: async () => { await setOrgConfig(host, null); await render(); } }, "Use browser session instead") : null,
-      t.out);
-  }) : [h("p", { class: "muted" }, "No orgs yet. Log into Salesforce in this browser and reload this page.")];
+        h("div", { class: "muted small" }, cfg?.mode === "oauth" ? t("Connects with OAuth") : t("Connects with your browser session"))),
+      test.btn,
+      cfg ? h("button", { class: "btn btn-ghost btn-small", onclick: async () => { await setOrgConfig(host, null); await render(); } }, t("Use browser session instead")) : null,
+      test.out);
+  }) : [h("p", { class: "muted" }, t("No orgs yet. Log into Salesforce in this browser and reload this page."))];
 
   app.replaceChildren(h("main", {},
     h("div", { class: "brand" }, logo(30), "OrgClearance"),
-    h("h1", {}, "Settings"),
-    h("p", { class: "intro" }, "OrgClearance only reads from Salesforce, and only from your browser. Nothing is sent anywhere else."),
+    h("h1", {}, t("Settings")),
+    h("p", { class: "intro" }, t("OrgClearance only reads from Salesforce, and only from your browser. Nothing is sent anywhere else.")),
+
+    languageCard(),
 
     h("section", { class: "card" },
-      h("h2", {}, "Your orgs"),
-      h("p", { class: "muted" }, "Orgs you're logged into appear here automatically."),
+      h("h2", {}, t("Your orgs")),
+      h("p", { class: "muted" }, t("Orgs you're logged into appear here automatically.")),
       orgRows),
 
     h("section", { class: "card" },
-      h("h2", {}, "Connect an org with OAuth"),
-      h("p", {}, "Only needed if an org blocks extensions from using your browser session (for example, with API Access Control). You'll create an app in that org so OrgClearance can sign in through it."),
+      h("h2", {}, t("Connect an org with OAuth")),
+      h("p", {}, t("Only needed if an org blocks extensions from using your browser session (for example, with API Access Control). You'll create an app in that org so OrgClearance can sign in through it.")),
       h("ol", { class: "steps" },
-        h("li", {}, "In Setup, create an External Client App (or a Connected App) and turn on OAuth."),
-        h("li", {}, "Use this callback URL:",
+        h("li", {}, t("In Setup, create an External Client App (or a Connected App) and turn on OAuth.")),
+        h("li", {}, t("Use this callback URL:"),
           h("div", { class: "callback" }, h("span", { class: "mono" }, redirectUri),
-            h("button", { class: "btn btn-ghost btn-small", onclick: (e) => navigator.clipboard.writeText(redirectUri).then(() => { e.currentTarget.lastChild.textContent = "Copied"; }) }, icon("copy"), "Copy"))),
-        h("li", {}, "Add the scope ", h("code", {}, "Manage user data via APIs (api)"), ". It's the only one needed."),
-        h("li", {}, "Turn on ", h("b", {}, "Require PKCE"), " and turn off ", h("b", {}, "Require Secret for Web Server Flow"), "."),
-        h("li", {}, "Copy the app's Consumer Key and paste it below.")),
-      h("p", { class: "muted small" }, "The sign-in lasts until you close the browser. OrgClearance never stores a password, secret or refresh token."),
+            h("button", { class: "btn btn-ghost btn-small", onclick: (e) => navigator.clipboard.writeText(redirectUri).then(() => { e.currentTarget.lastChild.textContent = t("Copied"); }) }, icon("copy"), t("Copy")))),
+        h("li", {}, t("Add the scope "), h("code", {}, "Manage user data via APIs (api)"), t(". It's the only one needed.")),
+        h("li", {}, t("Turn on "), h("b", {}, "Require PKCE"), t(" and turn off "), h("b", {}, "Require Secret for Web Server Flow"), "."),
+        h("li", {}, t("Copy the app's Consumer Key and paste it below."))),
+      h("p", { class: "muted small" }, t("The sign-in lasts until you close the browser. OrgClearance never stores a password, secret or refresh token.")),
       h("div", { class: "form" },
-        h("label", { for: "oc-url" }, "Org URL"), urlInput,
+        h("label", { for: "oc-url" }, t("Org URL")), urlInput,
         h("datalist", { id: "known-orgs" }, hosts.map((x) => h("option", { value: `https://${x}` }))),
         h("label", { for: "oc-key" }, "Consumer Key"), keyInput,
         formErr, save)),
@@ -101,11 +107,26 @@ async function render() {
     privacyCard(),
 
     h("section", { class: "card" },
-      h("h2", {}, "Keyboard shortcuts"),
-      h("p", {}, h("kbd", {}, "Alt"), " + ", h("kbd", {}, "Shift"), " + ", h("kbd", {}, "A"), " opens or closes the panel on a Salesforce page."),
-      h("p", {}, h("kbd", {}, "Alt"), " + ", h("kbd", {}, "Shift"), " + ", h("kbd", {}, "W"), " opens the workspace."),
-      h("p", { class: "muted small" }, "You can change them at chrome://extensions/shortcuts.")),
+      h("h2", {}, t("Keyboard shortcuts")),
+      h("p", {}, h("kbd", {}, "Alt"), " + ", h("kbd", {}, "Shift"), " + ", h("kbd", {}, "A"), t(" opens or closes the panel on a Salesforce page.")),
+      h("p", {}, h("kbd", {}, "Alt"), " + ", h("kbd", {}, "Shift"), " + ", h("kbd", {}, "W"), t(" opens the workspace.")),
+      h("p", { class: "muted small" }, t("You can change them at chrome://extensions/shortcuts."))),
   ));
+}
+
+// Interface language. "Automatic" follows the browser; the choice applies to every page of the extension.
+function languageCard() {
+  const select = h("select", { id: "oc-lang", style: "max-width:260px" },
+    [["auto", t("Automatic (same as the browser)")], ["en", "English"], ["es", "Español"]].map(([value, label]) => h("option", { value }, label)));
+  chrome.storage.local.get("lang").then((r) => { select.value = r.lang === "en" || r.lang === "es" ? r.lang : "auto"; }).catch(() => {});
+  select.addEventListener("change", async () => {
+    await chrome.storage.local.set({ lang: select.value });
+    location.reload();
+  });
+  return h("section", { class: "card" },
+    h("h2", {}, t("Language")),
+    h("p", { class: "muted" }, t("Applies to the panel, the workspace and the files you export. Reload open Salesforce tabs to see the change there.")),
+    h("label", { for: "oc-lang" }, t("Language")), select);
 }
 
 // What the extension keeps on this computer, and a way to clear it.
@@ -115,17 +136,19 @@ function privacyCard() {
     const all = await chrome.storage.local.get(null);
     const keys = Object.keys(all).filter((k) => k.startsWith("recent:"));
     await chrome.storage.local.remove(keys);
-    status.textContent = keys.length ? "Recent people cleared." : "There was nothing to clear.";
-  } }, "Forget recent people");
+    status.textContent = keys.length ? t("Recent people cleared.") : t("There was nothing to clear.");
+  } }, t("Forget recent people"));
   return h("section", { class: "card" },
-    h("h2", {}, "Your data"),
-    h("p", {}, "OrgClearance has no server and sends nothing outside Salesforce. On this computer it only keeps:"),
+    h("h2", {}, t("Your data")),
+    h("p", {}, t("OrgClearance has no server and sends nothing outside Salesforce. On this computer it only keeps:")),
     h("ul", {},
-      h("li", {}, "The last 8 people you looked up in each org (name, username, profile), to show them as shortcuts."),
-      h("li", {}, "How each org connects (browser session or OAuth, and the Consumer Key you pasted)."),
-      h("li", {}, "An OAuth sign-in, only until you close the browser.")),
+      h("li", {}, t("The last 8 people you looked up in each org (name, username, profile), to show them as shortcuts.")),
+      h("li", {}, t("How each org connects (browser session or OAuth, and the Consumer Key you pasted).")),
+      h("li", {}, t("An OAuth sign-in, only until you close the browser."))),
     h("div", { class: "row" }, forget, status));
 }
 
 document.head.append(h("style", {}, fontFaceCss("") + CSS + PAGE_CSS));
+await I18N.ready;
+document.documentElement.lang = I18N.getLang();
 render();

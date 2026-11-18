@@ -1,46 +1,52 @@
 // @ts-check
 // Plain-text summary of an access check, ready to paste into a ticket or a reply to the user.
+import "../i18n.js";
 
+const I18N = globalThis.OrgClearanceI18n;
+const t = (k, v) => I18N.t(k, v);
 const STATUS = { yes: "Yes", no: "No", unknown: "Can't tell", na: "Doesn't apply" };
+const status = (s) => t(STATUS[s] ?? s);
 const names = (list) => (list?.length ? list.map((s) => s.label).join(", ") : "");
 
 /** @param {any} r result of explainAccess */
 export function formatTicket(r, { date = new Date() } = {}) {
-  const what = r.field ? `the ${r.field} field on ${r.sobject} ${r.recordId ?? ""}`.trim() : `${r.sobject} ${r.recordId ?? ""}`.trim();
-  const answer = { yes: "Can see it", no: "Can't see it", unknown: "Couldn't confirm" }[r.verdict.status];
+  const id = r.recordId ? ` ${r.recordId}` : "";
+  const what = r.field ? t("the {field} field on {sobject}{id}", { field: r.field, sobject: r.sobject, id }) : `${r.sobject}${id}`;
+  const answer = t({ yes: "Can see it", no: "Can't see it", unknown: "Couldn't confirm" }[r.verdict.status]);
   const lines = [
-    `Access check: ${r.user.name} (${r.user.username}) on ${what}`,
-    `Result: ${answer}`,
+    t("Access check: {name} ({username}) on {what}", { name: r.user.name, username: r.user.username, what }),
+    t("Result: {answer}", { answer }),
   ];
-  if (r.verdict.reasons.length) lines.push("", "Why:", ...r.verdict.reasons.map((x) => `- ${x}`));
+  if (r.verdict.reasons.length) lines.push("", t("Why:"), ...r.verdict.reasons.map((x) => `- ${x}`));
 
-  lines.push("", "Details:");
+  lines.push("", t("Details:"));
   const o = r.object;
-  lines.push(`- Object ${r.sobject}: ${STATUS[o.status]}${o.readBy?.length ? ` (read from ${names(o.readBy)})` : ""}`);
+  lines.push(`- ${t("Object {sobject}", { sobject: r.sobject })}: ${status(o.status)}${o.readBy?.length ? ` (${t("read from {sources}", { sources: names(o.readBy) })})` : ""}`);
   const f = r.fieldAccess;
   if (f && f.status !== "skipped") {
-    lines.push(`- Field ${r.field}: ${STATUS[f.status]}${f.readBy?.length ? ` (read from ${names(f.readBy)})` : f.status === "no" ? " (field-level security)" : ""}`);
+    const extra = f.readBy?.length ? ` (${t("read from {sources}", { sources: names(f.readBy) })})` : f.status === "no" ? ` (${t("field-level security")})` : "";
+    lines.push(`- ${t("Field {field}", { field: r.field })}: ${status(f.status)}${extra}`);
   }
   const sc = r.screen;
   if (sc && sc.status !== "skipped") {
-    const where = sc.layout ? ` (layout: ${sc.layout.name}${sc.recordType ? `, record type: ${sc.recordType.name}` : ""})` : "";
-    lines.push(`- On their page: ${STATUS[sc.status]}${where}`);
+    const where = sc.layout ? ` (${sc.recordType ? t("layout: {layout}, record type: {recordType}", { layout: sc.layout.name, recordType: sc.recordType.name }) : t("layout: {layout}", { layout: sc.layout.name })})` : "";
+    lines.push(`- ${t("On their page")}: ${status(sc.status)}${where}`);
   }
   const c = r.record;
   if (c && c.status !== "skipped") {
-    const why = c.reasons?.length ? ` (${c.reasons.map((x) => x.text).join("; ")})` : c.owd ? ` (org-wide default: ${c.owd.label})` : "";
-    lines.push(`- Record: ${STATUS[c.status]}${why}`);
+    const why = c.reasons?.length ? ` (${c.reasons.map((x) => x.text).join("; ")})` : c.owd ? ` (${t("org-wide default: {label}", { label: c.owd.label })})` : "";
+    lines.push(`- ${t("Record")}: ${status(c.status)}${why}`);
   }
   if (r.suggestions?.length) {
-    const cap = (t) => t.replace(/^Or /, "").replace(/^./, (ch) => ch.toUpperCase());
+    const cap = (s) => s.replace(/^(?:Or|O) /, "").replace(/^./, (ch) => ch.toUpperCase());
     const groups = problemGroups(r);
-    lines.push("", groups.length > 1 ? "Suggested fix (each part needs one of its options):" : "Suggested fix (pick one):");
+    lines.push("", groups.length > 1 ? t("Suggested fix (each part needs one of its options):") : t("Suggested fix (pick one):"));
     for (const g of groups) {
       if (groups.length > 1) lines.push(`${g.title}:`);
       lines.push(...g.items.map((s) => `- ${cap(s.title)}. ${s.detail}`));
     }
   }
-  lines.push("", `Checked with OrgClearance on ${date.toISOString().slice(0, 10)}.`);
+  lines.push("", t("Checked with OrgClearance on {date}.", { date: date.toISOString().slice(0, 10) }));
   return lines.join("\n");
 }
 
@@ -53,8 +59,8 @@ export function problemGroups(r) {
     const key = s.problem ?? "other";
     let g = groups.find((x) => x.key === key);
     if (!g) {
-      const title = key === "object" ? `Read on ${r.sobject}` : key === "field" ? `Read on the ${r.field} field` : key === "screen" ? "Showing the field on their page"
-        : key === "record" ? "Access to this record" : PROBLEM_TITLE[key] ?? "Other";
+      const title = key === "object" ? t("Read on {sobject}", { sobject: r.sobject }) : key === "field" ? t("Read on the {field} field", { field: r.field })
+        : key === "screen" ? t("Showing the field on their page") : key === "record" ? t("Access to this record") : t(PROBLEM_TITLE[key] ?? "Other");
       g = { key, title, items: [] };
       groups.push(g);
     }

@@ -9,6 +9,9 @@
 
 const CONFIG_KEY = "orgConfigs";
 import { isSalesforceHost } from "./hosts.js";
+import "../i18n.js";
+
+const t = (k, v) => globalThis.OrgClearanceI18n.t(k, v);
 
 /** @typedef {{mode: "cookie" | "oauth", clientId?: string}} OrgConfig */
 
@@ -20,7 +23,7 @@ export function normalizeHost(input) {
   host = host.replace(/\/.*$/, "").toLowerCase()
     .replace(".lightning.force.com", ".my.salesforce.com")
     .replace(".my.salesforce-setup.com", ".my.salesforce.com");
-  if (!isSalesforceHost(host)) throw new Error("That doesn't look like a Salesforce My Domain URL (e.g. https://acme.my.salesforce.com).");
+  if (!isSalesforceHost(host)) throw new Error(t("That doesn't look like a Salesforce My Domain URL (e.g. https://acme.my.salesforce.com)."));
   return host;
 }
 
@@ -75,10 +78,10 @@ export function buildAuthorizeUrl({ host, clientId, redirectUri, challenge, stat
 export function parseRedirect(redirected, expectedState) {
   const url = new URL(redirected);
   const params = url.searchParams;
-  if (params.get("error")) throw new Error(`Salesforce refused the login: ${params.get("error_description") || params.get("error")}`);
-  if (params.get("state") !== expectedState) throw new Error("OAuth state mismatch. Try again.");
+  if (params.get("error")) throw new Error(t("Salesforce refused the login: {error}", { error: params.get("error_description") || params.get("error") }));
+  if (params.get("state") !== expectedState) throw new Error(t("OAuth state mismatch. Try again."));
   const code = params.get("code");
-  if (!code) throw new Error("Salesforce didn't return an authorization code.");
+  if (!code) throw new Error(t("Salesforce didn't return an authorization code."));
   return code;
 }
 
@@ -102,7 +105,7 @@ export async function getOAuthSession(host, { interactive = true, fetchImpl } = 
   if (cached?.sid) return cached;
 
   const config = await getOrgConfig(host);
-  if (config?.mode !== "oauth" || !config.clientId) throw new Error(`OAuth isn't set up for ${host}. Open the extension options.`);
+  if (config?.mode !== "oauth" || !config.clientId) throw new Error(t("OAuth isn't set up for {host}. Open the extension options.", { host }));
 
   const redirectUri = chrome.identity.getRedirectURL("oauth2");
   const verifier = randomString(64);
@@ -113,9 +116,9 @@ export async function getOAuthSession(host, { interactive = true, fetchImpl } = 
   try {
     redirected = await chrome.identity.launchWebAuthFlow({ url: authUrl, interactive });
   } catch (e) {
-    throw new Error(interactive ? `Login window closed or failed: ${e.message}` : "Login required.");
+    throw new Error(interactive ? t("Login window closed or failed: {error}", { error: e.message }) : t("Login required."));
   }
-  if (!redirected) throw new Error("Login was cancelled.");
+  if (!redirected) throw new Error(t("Login was cancelled."));
   const code = parseRedirect(redirected, state);
 
   const res = await (fetchImpl ?? fetch)(`https://${host}/services/oauth2/token`, {
@@ -125,12 +128,12 @@ export async function getOAuthSession(host, { interactive = true, fetchImpl } = 
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.access_token) {
-    throw new Error(`Token request failed: ${body.error_description || body.error || `HTTP ${res.status}`}. Check the Consumer Key, callback URL and that "Require Secret for Web Server Flow" is off.`);
+    throw new Error(t("Token request failed: {error}. Check the Consumer Key, callback URL and that \"Require Secret for Web Server Flow\" is off.", { error: body.error_description || body.error || `HTTP ${res.status}` }));
   }
   // The API host comes from Salesforce's response; only accept a Salesforce domain.
   let instanceHost = "";
   try { instanceHost = new URL(body.instance_url).hostname; } catch { /* invalid URL */ }
-  if (!isSalesforceHost(instanceHost)) throw new Error("Salesforce returned an unexpected instance URL. Login aborted.");
+  if (!isSalesforceHost(instanceHost)) throw new Error(t("Salesforce returned an unexpected instance URL. Login aborted."));
   const session = { host: instanceHost, sid: body.access_token };
   await chrome.storage.session.set({ [tokenKey(host)]: session });
   return session;

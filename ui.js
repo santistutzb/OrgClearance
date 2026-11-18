@@ -4,6 +4,10 @@
 // innerHTML is only used for the constant icon markup defined in this file.
 (() => {
   if (globalThis.OrgClearanceUI) return;
+  const I18N = globalThis.OrgClearanceI18n;
+  const t = (k, v) => I18N.t(k, v);
+  // Label maps read the language when used, not when this script loads (the saved choice loads async).
+  const lazy = (o) => Object.defineProperties({}, Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { get: () => t(v), enumerable: true }])));
 
   /** @param {string} tag @param {Record<string, any>} [props] @param {...any} children @returns {any} */
   function h(tag, props = {}, ...children) {
@@ -213,14 +217,14 @@
     const usage = { calls: 0, cached: 0, orgUsage: null };
     /** @param {Record<string, any>} msg */
     const send = (msg) => new Promise((resolve, reject) =>
-      chrome.runtime.sendMessage({ ...extra(), ...msg }, (res) => {
+      chrome.runtime.sendMessage({ lang: I18N.getLang(), ...extra(), ...msg }, (res) => {
         if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
         if (res?.meta) {
           usage.calls += res.meta.calls || 0;
           usage.cached += res.meta.cached || 0;
           if (res.meta.orgUsage) usage.orgUsage = res.meta.orgUsage;
         }
-        res?.ok ? resolve(res.data) : reject(new Error(res?.error || "Something went wrong. Try again."));
+        res?.ok ? resolve(res.data) : reject(new Error(res?.error || t("Something went wrong. Try again.")));
       }));
     send.usage = usage;
     send.resetUsage = () => { usage.calls = 0; usage.cached = 0; };
@@ -229,12 +233,12 @@
 
   function usageLine(usage) {
     const m = /api-usage=(\d+)\/(\d+)/.exec(usage.orgUsage || "");
-    const parts = [`${usage.calls} API call${usage.calls === 1 ? "" : "s"}${usage.cached ? `, ${usage.cached} from cache` : ""}`];
-    if (m) parts.push(`org usage today ${Number(m[1]).toLocaleString()} of ${Number(m[2]).toLocaleString()}`);
-    return h("div", { class: "usage" }, `Used ${parts.join("; ")}.`);
+    const parts = [I18N.tn(usage.calls, "{n} API call", "{n} API calls") + (usage.cached ? t(", {n} from cache", { n: usage.cached }) : "")];
+    if (m) parts.push(t("org usage today {used} of {max}", { used: Number(m[1]).toLocaleString(), max: Number(m[2]).toLocaleString() }));
+    return h("div", { class: "usage" }, t("Used {parts}.", { parts: parts.join("; ") }));
   }
 
-  const loading = (text = "Checking…") => h("div", { class: "loading", role: "status" }, h("span", { class: "spinner" }), text);
+  const loading = (text = undefined) => h("div", { class: "loading", role: "status" }, h("span", { class: "spinner" }), text ?? t("Checking…"));
   const errorBox = (e) => h("div", { class: "err", role: "alert" }, icon("alert"), h("div", {}, e.message));
   const empty = (iconName, title, text) => h("div", { class: "empty" }, icon(iconName), h("div", {}, h("b", {}, title), text));
   const notes = (list) => list?.length ? h("div", { class: "note" }, h("ul", {}, list.map((n) => h("li", {}, n)))) : null;
@@ -251,10 +255,10 @@
 
   // ---------- small renderers ----------
 
-  const STATUS = { yes: "Yes", no: "No", unknown: "Can't tell", na: "Doesn't apply" };
+  const STATUS = lazy({ yes: "Yes", no: "No", unknown: "Can't tell", na: "Doesn't apply" });
   const STATUS_ICON = { yes: "check", no: "x", unknown: "help", na: "minus" };
-  const ACCESS = { edit: "Edit", read: "Read", none: "None", always: "Always" };
-  const KIND = { profile: "Profile", permset: "Permission set", group: "Permission set group" };
+  const ACCESS = lazy({ edit: "Edit", read: "Read", none: "None", always: "Always" });
+  const KIND = lazy({ profile: "Profile", permset: "Permission set", group: "Permission set group" });
 
   const statusPill = (status, text) => h("span", { class: `status s-${status}` },
     STATUS_ICON[status] ? icon(STATUS_ICON[status]) : null, text ?? STATUS[status] ?? status);
@@ -265,7 +269,7 @@
   const labels = (items) => items?.length ? items.map((s) => s.label).join(", ") : "nobody";
   const initials = (name) => String(name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("") || "?";
   const avatar = (name, cls = "") => h("span", { class: `avatar ${cls}`.trim(), "aria-hidden": "true" }, initials(name));
-  const userLine = (u) => [u.profileName ?? "No profile", u.roleName].filter(Boolean).join(", ");
+  const userLine = (u) => [u.profileName ?? t("No profile"), u.roleName].filter(Boolean).join(", ");
 
   /** Collapsible row: status dot, title, one-line summary, details below. */
   function checkRow(status, title, line, body, open = false) {
@@ -315,7 +319,7 @@
    */
   function userPicker(send, labelText, getKey) {
     let user = null;
-    const input = h("input", { type: "search", placeholder: "Search by name, username or email", "aria-label": labelText, autocomplete: "off" });
+    const input = h("input", { type: "search", placeholder: t("Search by name, username or email"), "aria-label": labelText, autocomplete: "off" });
     const searchBox = h("div", { class: "search" }, icon("search"), input);
     const hits = h("div");
     const picked = h("div", { hidden: true });
@@ -329,8 +333,8 @@
     const choose = (u) => {
       user = u; hits.replaceChildren();
       picked.replaceChildren(h("div", { class: "picked" }, avatar(u.name),
-        h("div", { class: "who" }, h("div", { class: "name" }, u.name + (u.isActive === false ? " (inactive)" : "")), h("div", { class: "sub muted small" }, u.username)),
-        h("button", { class: "btn btn-ghost btn-small", onclick: () => { picker.clear(); picker.onChange(); input.focus(); } }, "Change")));
+        h("div", { class: "who" }, h("div", { class: "name" }, u.name + (u.isActive === false ? t(" (inactive)") : "")), h("div", { class: "sub muted small" }, u.username)),
+        h("button", { class: "btn btn-ghost btn-small", onclick: () => { picker.clear(); picker.onChange(); input.focus(); } }, t("Change"))));
       picked.hidden = false; searchBox.hidden = true;
       picker.onChange();
       addRecent(getKey(), u);
@@ -339,7 +343,7 @@
       if (input.value.trim()) return;
       const recent = await getRecent(getKey());
       hits.replaceChildren(recent.length
-        ? h("div", { class: "chips" }, h("span", { class: "muted small" }, "Recent:"),
+        ? h("div", { class: "chips" }, h("span", { class: "muted small" }, t("Recent:")),
             recent.map((u) => h("button", { class: "chip", title: u.username, onclick: () => choose(u) }, avatar(u.name), u.name)))
         : "");
     };
@@ -355,9 +359,9 @@
           hits.replaceChildren(users.length
             ? h("div", { class: "hits" }, users.map((u) =>
                 h("button", { class: "hit", onclick: () => choose(u) }, avatar(u.name),
-                  h("span", { class: "who" }, h("div", { class: "name" }, u.name + (u.isActive ? "" : " (inactive)")),
+                  h("span", { class: "who" }, h("div", { class: "name" }, u.name + (u.isActive ? "" : t(" (inactive)"))),
                     h("div", { class: "sub" }, `${u.username}, ${userLine(u)}`)))))
-            : h("div", { class: "muted small", style: "margin-top:6px" }, `No users match "${term}".`));
+            : h("div", { class: "muted small", style: "margin-top:6px" }, t("No users match \"{term}\".", { term })));
         } catch (e) { hits.replaceChildren(errorBox(e)); }
       }, 300);
     });
@@ -368,7 +372,7 @@
   function tabs(views, onSelect = {}, icons = {}) {
     const buttons = Object.keys(views).map((name, i) =>
       h("button", { role: "tab", "aria-selected": i === 0 ? "true" : "false", "data-name": name, onclick: () => select(name) },
-        icons[name] ? icon(icons[name]) : null, name));
+        icons[name] ? icon(icons[name]) : null, t(name)));
     function select(name) {
       buttons.forEach((t) => t.setAttribute("aria-selected", t.dataset.name === name ? "true" : "false"));
       Object.entries(views).forEach(([n, v]) => { v.hidden = n !== name; });

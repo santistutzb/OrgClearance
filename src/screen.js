@@ -10,7 +10,11 @@
 // Which Lightning page a user gets depends on app, record type and profile assignments that we don't
 // resolve. When Dynamic Forms pages disagree with the layout, the answer is "unknown" with the pages listed.
 
+import "../i18n.js";
 import { lightningBase } from "./suggest.js";
+
+const I18N = globalThis.OrgClearanceI18n;
+const t = (k, v) => I18N.t(k, v);
 
 const NAME_RE = /^[A-Za-z0-9_]+$/;
 const ID_RE = /^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$/;
@@ -70,9 +74,9 @@ export function pageFields(metadata) {
  * @param {{user: any, sobject: string, recordId?: string|null, field: string}} p
  */
 export async function screenCheck(client, { user, sobject, recordId, field }) {
-  if (!NAME_RE.test(sobject || "") || !NAME_RE.test(field || "")) throw new Error("Invalid object or field");
+  if (!NAME_RE.test(sobject || "") || !NAME_RE.test(field || "")) throw new Error(t("Invalid object or field"));
   if (!user?.profileId || !ID_RE.test(user.profileId)) {
-    return { status: "unknown", error: "Couldn't read the user's profile." };
+    return { status: "unknown", error: t("Couldn't read the user's profile.") };
   }
   const links = screenLinks(client.host || "", sobject);
   const result = { status: "unknown", recordType: null, layout: null, onLayout: null, behavior: null, pages: [], notes: [] };
@@ -91,7 +95,7 @@ export async function screenCheck(client, { user, sobject, recordId, field }) {
       recordTypeId = rec.value[0].RecordTypeId;
       result.recordType = { id: recordTypeId, name: rec.value[0].RecordType?.Name ?? recordTypeId };
     } else if (!rec.ok) {
-      result.notes.push(`Couldn't read this record's record type: ${rec.error}`);
+      result.notes.push(t("Couldn't read this record's record type: {error}", { error: rec.error }));
     }
   }
 
@@ -102,14 +106,14 @@ export async function screenCheck(client, { user, sobject, recordId, field }) {
   const assign = await attempt(() => client.toolingQuery(
     `SELECT LayoutId, Layout.Name, RecordTypeId FROM ProfileLayout WHERE ProfileId = '${user.profileId}' AND TableEnumOrId IN (${tableIds})`));
   if (!assign.ok) {
-    result.error = `Couldn't read page layout assignments: ${assign.error}`;
+    result.error = t("Couldn't read page layout assignments: {error}", { error: assign.error });
   } else {
     const isMaster = (id) => !id || id === MASTER_RT;
     const row = assign.value.find((a) => (recordTypeId ? a.RecordTypeId === recordTypeId : isMaster(a.RecordTypeId)))
       ?? assign.value.find((a) => isMaster(a.RecordTypeId))
       ?? (assign.value.length === 1 ? assign.value[0] : null);
     if (!row) {
-      result.error = "No page layout is assigned to their profile for this record type.";
+      result.error = t("No page layout is assigned to their profile for this record type.");
     } else {
       result.layout = { id: row.LayoutId, name: row.Layout?.Name ?? row.LayoutId, url: links.layout(row.LayoutId) };
       const lm = await attempt(() => client.toolingQuery(`SELECT Metadata FROM Layout WHERE Id = '${row.LayoutId}'`));
@@ -119,7 +123,7 @@ export async function screenCheck(client, { user, sobject, recordId, field }) {
         result.onLayout = !!hit;
         result.behavior = hit ? fields.get(hit) : null;
       } else {
-        result.error = `Couldn't read the ${result.layout.name} layout: ${lm.ok ? "no metadata returned" : lm.error}`;
+        result.error = t("Couldn't read the {layout} layout: {error}", { layout: result.layout.name, error: lm.ok ? t("no metadata returned") : lm.error });
       }
     }
   }
@@ -130,7 +134,7 @@ export async function screenCheck(client, { user, sobject, recordId, field }) {
   if (pages.ok) {
     for (const p of pages.value.slice(0, MAX_PAGES)) {
       const pm = await attempt(() => client.toolingQuery(`SELECT Metadata FROM FlexiPage WHERE Id = '${p.Id}'`));
-      if (!pm.ok || !pm.value[0]?.Metadata) { result.notes.push(`Couldn't read the ${p.MasterLabel} page.`); continue; }
+      if (!pm.ok || !pm.value[0]?.Metadata) { result.notes.push(t("Couldn't read the {page} page.", { page: p.MasterLabel })); continue; }
       const info = pageFields(pm.value[0].Metadata);
       const hit = names.find((n) => info.fields.has(n));
       result.pages.push({
@@ -141,9 +145,9 @@ export async function screenCheck(client, { user, sobject, recordId, field }) {
         behavior: hit ? info.fields.get(hit).behavior : null,
       });
     }
-    if (pages.value.length > MAX_PAGES) result.notes.push(`Only the first ${MAX_PAGES} of ${pages.value.length} Lightning pages were checked.`);
+    if (pages.value.length > MAX_PAGES) result.notes.push(t("Only the first {max} of {total} Lightning pages were checked.", { max: MAX_PAGES, total: pages.value.length }));
   } else {
-    result.notes.push(`Couldn't list Lightning record pages: ${pages.error}`);
+    result.notes.push(t("Couldn't list Lightning record pages: {error}", { error: pages.error }));
   }
 
   // 4. Decide.
@@ -156,9 +160,9 @@ export async function screenCheck(client, { user, sobject, recordId, field }) {
   } else {
     const agree = dynamic.every((p) => p.hasField === result.onLayout) && !conditional.length;
     result.status = agree ? (result.onLayout ? "yes" : "no") : "unknown";
-    if (!agree) result.notes.push("Some Lightning pages use Dynamic Forms and don't match the page layout. Which one they see depends on app, record type and profile assignments.");
+    if (!agree) result.notes.push(t("Some Lightning pages use Dynamic Forms and don't match the page layout. Which one they see depends on app, record type and profile assignments."));
   }
-  if (conditional.length) result.notes.push(`On ${conditional.map((p) => p.name).join(", ")} the field only shows when its visibility rule is met.`);
-  if (result.status === "yes" && /readonly/i.test(result.behavior ?? "")) result.notes.push("It's read-only on their layout, even if field-level security allows editing.");
+  if (conditional.length) result.notes.push(t("On {pages} the field only shows when its visibility rule is met.", { pages: conditional.map((p) => p.name).join(", ") }));
+  if (result.status === "yes" && /readonly/i.test(result.behavior ?? "")) result.notes.push(t("It's read-only on their layout, even if field-level security allows editing."));
   return result;
 }

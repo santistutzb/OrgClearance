@@ -3,6 +3,9 @@
 // No login of its own: it reads the `sid` cookie from the org's API domain.
 
 import { isSalesforceHost } from "./hosts.js";
+import "../i18n.js";
+
+const t = (k, v) => globalThis.OrgClearanceI18n.t(k, v);
 
 // API session cookies live on *.my.salesforce.com (and older *.salesforce.com instance hosts).
 const API_COOKIE_DOMAINS = ["salesforce.com"];
@@ -14,7 +17,7 @@ export function guessApiHost(pageHost) {
 }
 
 export async function getSession(pageHost) {
-  if (!isSalesforceHost(pageHost)) throw new Error("Not a Salesforce page.");
+  if (!isSalesforceHost(pageHost)) throw new Error(t("Not a Salesforce page."));
 
   const pageCookie = await chrome.cookies.get({ url: `https://${pageHost}`, name: "sid" });
   if (pageCookie && pageHost.endsWith(".my.salesforce.com")) {
@@ -37,7 +40,7 @@ export async function getSession(pageHost) {
   const guessCookie = await chrome.cookies.get({ url: `https://${guess}`, name: "sid" });
   if (guessCookie) return { host: guess, sid: guessCookie.value };
 
-  throw new Error("No active Salesforce session found for this org. Log in again and reload the page.");
+  throw new Error(t("No active Salesforce session found for this org. Log in again and reload the page."));
 }
 
 // Every org the user is logged into in this browser, one entry per org, API domains only.

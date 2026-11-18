@@ -6,6 +6,9 @@
 // Then the org's auth mode picks the cookie session or an OAuth token.
 
 import { getSession, guessApiHost, listOrgSessions } from "./session.js";
+import "../i18n.js";
+
+const t = (k, v) => globalThis.OrgClearanceI18n.t(k, v);
 import { getAllConfigs, getOrgConfig, getOAuthSession, clearToken } from "./auth.js";
 
 /** Orgs available to the workspace: logged in via cookie, or configured for OAuth. No session ids. */
@@ -28,13 +31,13 @@ export async function resolveSession({ pageHost, orgHost, interactive = true }) 
   if (orgHost) {
     const cookie = (await listOrgSessions()).find((s) => s.host === orgHost);
     const config = await getOrgConfig(orgHost);
-    if (!cookie && config?.mode !== "oauth") throw new Error(`You're not logged into ${orgHost} in this browser. Log in and try again.`);
+    if (!cookie && config?.mode !== "oauth") throw new Error(t("You're not logged into {org} in this browser. Log in and try again.", { org: orgHost }));
     base = { host: orgHost, sid: cookie?.sid ?? null };
   } else if (pageHost) {
     try { base = await getSession(pageHost); }
     catch (e) { base = { host: guessApiHost(pageHost), sid: null, error: e }; }
   } else {
-    throw new Error("No org selected.");
+    throw new Error(t("No org selected."));
   }
 
   const config = await getOrgConfig(base.host);
@@ -42,7 +45,7 @@ export async function resolveSession({ pageHost, orgHost, interactive = true }) 
     const s = await getOAuthSession(base.host, { interactive });
     return { ...s, auth: "oauth", configHost: base.host };
   }
-  if (!base.sid) throw base.error ?? new Error("No active Salesforce session found for this org.");
+  if (!base.sid) throw base.error ?? new Error(t("No active Salesforce session found for this org."));
   return { host: base.host, sid: base.sid, auth: "cookie", configHost: base.host };
 }
 

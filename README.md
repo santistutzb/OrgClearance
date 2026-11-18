@@ -37,6 +37,12 @@ or that only allow approved apps, reject that. For those, switch the org to **OA
 Authorization code flow with PKCE, no client secret. The access token is kept in `chrome.storage.session`
 (cleared when the browser closes) and no refresh token is requested. An expired token triggers a new login and one retry.
 
+## Language
+
+English and Spanish. By default the extension follows the browser's language (Spanish if the browser is in Spanish, English otherwise); **Settings → Language** overrides it. Everything is translated: the panel, the workspace, verdicts and reasons, fix suggestions, the ticket text, audit results, exported docs and reports, and error messages. Names that come from Salesforce (objects, fields, permission sets) and Setup terms admins search for (page layout, record type, permission set) stay as they are.
+
+To add or change a translation, edit the `ES` table in `i18n.js`: the English text is the key. `test/i18n.test.js` fails if any text passed to the translator has no Spanish entry or its `{placeholders}` don't match, and `test/ui.test.js` renders the panel and workspace in Spanish and fails on anything that fell back to English.
+
 ## Look and feel
 
 - Icon: a shield with a check (access granted, clearance) and a magnifier (inspect, audit, compare). Source in `icons/icon.svg`; a simplified `icon-small.svg` is used for 16 and 32 px.
@@ -117,6 +123,7 @@ Authorization code flow with PKCE, no client secret. The access token is kept in
 | File | What it does |
 |---|---|
 | `manifest.json` | Permissions: `cookies`, `storage`, `identity` (OAuth) and Salesforce domains. Shortcuts. |
+| `i18n.js` | Translator (`t`, `tn` for plurals) and the Spanish table. Loaded by every page and the service worker; pages send their language with each request. |
 | `ui.js` | Shared UI kit: design tokens, icons, components, user picker with recent users, API usage line. |
 | `icons/`, `fonts/` | Extension icon (SVG + PNG sizes) and bundled typeface. |
 | `content.js` | Record panel in a Shadow DOM. |
