@@ -20,14 +20,16 @@ function badText(root) {
   return out;
 }
 
-function setup(url, extra = []) {
+function setup(url, extra = [], lang = null) {
   const dom = new JSDOM(`<!doctype html><head></head><body><div id="app"></div></body>`, { url, runScripts: "outside-only", pretendToBeVisual: true });
   const w = dom.window;
   w.URL.createObjectURL = () => "blob:x"; w.URL.revokeObjectURL = () => {};
   let shadow;
   const orig = w.Element.prototype.attachShadow;
   w.Element.prototype.attachShadow = function (o) { shadow = orig.call(this, { ...o, mode: "open" }); return shadow; };
-  for (const f of ["test/fixtures/ui-mock.js", ...extra, "ui.js"]) w.eval(read(f));
+  for (const f of ["test/fixtures/ui-mock.js", ...extra]) w.eval(read(f));
+  if (lang) w.eval(`chrome.storage.local.set({ lang: ${JSON.stringify(lang)} })`);
+  for (const f of ["i18n.js", "ui.js"]) w.eval(read(f));
   return { w, shadow: () => shadow };
 }
 
@@ -41,6 +43,7 @@ async function pick(w, scope, index = 0) {
 test("panel: every tab renders clean text with all sections expanded", async () => {
   const { w, shadow } = setup("https://acme.lightning.force.com/lightning/r/Account/001000000000001AAA/view");
   w.eval(read("content.js"));
+  await tick();
   const r = shadow();
   r.querySelector(".fab").click(); await tick();
   assert.equal(r.querySelector(".rname").textContent, "Acme Retail Group", "record header shows the record name");
@@ -126,4 +129,41 @@ test("workspace: every page renders clean text with all sections expanded", asyn
   assert.ok(v.querySelectorAll("details.group").length >= 3);
   assert.deepEqual(badText(v), [], "Orgs");
   assert.deepEqual(badText(d.body), [], "whole workspace");
+});
+
+test("spanish: panel and workspace render without falling back to English", async () => {
+  const panel = setup("https://acme.lightning.force.com/lightning/r/Account/001000000000001AAA/view", [], "es");
+  panel.w.eval(read("content.js"));
+  await tick();
+  const r = panel.shadow();
+  r.querySelector(".fab").click(); await tick();
+  const tabButtons = [...r.querySelectorAll(".tabs button")];
+  assert.deepEqual(tabButtons.map((b) => b.textContent), ["Explicar", "Campos", "Comparar", "Quién", "Historial"]);
+  const visible = () => [...r.querySelectorAll(".panel-body > div")].find((v) => !v.hidden);
+  for (const b of tabButtons) {
+    b.click();
+    const v = visible();
+    const pickers = { Explain: 1, Fields: 1, Compare: 2 }[b.dataset.name] ?? 0;
+    for (let i = 0; i < pickers; i++) await pick(panel.w, v, i);
+    v.querySelector("input[list]") && (v.querySelector("input[list]").value = "AnnualRevenue");
+    v.querySelector(".btn-primary")?.click(); v.querySelector(".btn-secondary:not(.btn-small)")?.click(); await tick(200);
+    v.querySelectorAll("details").forEach((d) => { d.open = true; });
+  }
+  assert.ok(r.querySelector(".pass .answer").textContent.includes("No puede ver"), "verdict in Spanish");
+  assert.deepEqual([...panel.w.OrgClearanceI18n.misses], [], "panel texts without Spanish");
+
+  const ws = setup("https://extid.chromiumapp.org/workspace.html", ["test/fixtures/ui-mock-workspace.js"], "es");
+  ws.w.eval(read("workspace.js"));
+  await tick(250);
+  const d = ws.w.document;
+  assert.equal(d.documentElement.lang, "es");
+  for (const name of ["User", "Audit", "Docs", "Orgs"]) {
+    [...d.querySelectorAll("nav.side button")].find((b) => b.dataset.name === name).click();
+    const v = [...d.querySelectorAll(".content > div")].find((x) => !x.hidden);
+    if (name === "User") { v.querySelector("input[type=search]").dispatchEvent(new ws.w.Event("focus")); await tick(); v.querySelector(".chip").click(); }
+    if (v.querySelector("input[list]")) v.querySelector("input[list]").value = "Invoice__c";
+    v.querySelector(".btn-primary").click(); await tick();
+    d.querySelectorAll("details").forEach((x) => { x.open = true; });
+  }
+  assert.deepEqual([...ws.w.OrgClearanceI18n.misses], [], "workspace texts without Spanish");
 });

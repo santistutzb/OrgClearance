@@ -14,6 +14,10 @@ import { runAudit } from "./src/audit.js";
 import { collectObjectDoc, toMarkdown, toHtml, toMermaid } from "./src/docs.js";
 import { snapshot, diffSnapshots, toMarkdownReport } from "./src/orgdiff.js";
 import { buildTimeline, scanLogs } from "./src/timeline.js";
+import "./i18n.js";
+
+const I18N = globalThis.OrgClearanceI18n;
+const t = (k, v) => I18N.t(k, v);
 
 const EXT_ORIGIN = chrome.runtime.getURL("");
 
@@ -59,7 +63,7 @@ const handlers = {
   compareOrgs: {
     pages: "any",
     run: async (c, m, session) => {
-      if (m.otherOrg === session.configHost) throw new Error("Pick two different orgs.");
+      if (m.otherOrg === session.configHost) throw new Error(t("Pick two different orgs."));
       const other = await resolveSession({ orgHost: m.otherOrg });
       const otherClient = createClient(other);
       const [a, b] = await Promise.all([snapshot(c, m.sobject), snapshot(otherClient, m.sobject)]);
@@ -115,13 +119,15 @@ function sessionTarget(msg, sender) {
 function withHint(e, session) {
   const msg = e?.message || String(e);
   if (session?.auth !== "oauth" && isApiBlocked(e)) {
-    return `${msg} This org blocks API access with the browser session. Set up OAuth for it in the extension options.`;
+    return `${msg} ${t("This org blocks API access with the browser session. Set up OAuth for it in the extension options.")}`;
   }
   return msg;
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return false;
+  // Each page says which language it shows, so results and errors come back in the same one.
+  if (msg?.lang) I18N.setLang(msg.lang);
   const fromExt = isExtensionPage(sender);
 
   if (local[msg?.type]) {

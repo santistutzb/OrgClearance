@@ -1,6 +1,10 @@
 // Object documentation: data dictionary + automations + order-of-execution diagram.
 // Collection talks to Salesforce; rendering (Markdown, HTML, Mermaid) is pure and testable.
 
+import "../i18n.js";
+
+const I18N = globalThis.OrgClearanceI18n;
+const tr = (k, v) => I18N.t(k, v);
 const NAME_RE = /^[A-Za-z0-9_]+$/;
 
 async function attempt(fn) {
@@ -46,7 +50,7 @@ export function fieldType(f) {
 }
 
 export async function collectObjectDoc(client, sobject) {
-  if (!NAME_RE.test(sobject || "")) throw new Error("Invalid object");
+  if (!NAME_RE.test(sobject || "")) throw new Error(tr("Invalid {what}", { what: tr("object") }));
   const desc = await client.describe(sobject);
   const notes = [];
   const links = setupLinks(client.host || "", sobject);
@@ -101,7 +105,7 @@ export async function collectObjectDoc(client, sobject) {
     events: EVENTS.filter(([k]) => t[`Usage${k}`]).map(([, v]) => v),
     url: t.Id ? links.trigger(t.Id) : null,
   })) : [];
-  if (!trig.ok) notes.push(`Couldn't read Apex triggers: ${trig.error}`);
+  if (!trig.ok) notes.push(tr("Couldn't read Apex triggers: {error}", { error: trig.error }));
 
   const flowList = flows.ok ? flows.value
     .filter((f) => [sobject, durableId].includes(f.TriggerObjectOrEventId) || f.TriggerObjectOrEventLabel === desc.label)
@@ -111,14 +115,14 @@ export async function collectObjectDoc(client, sobject) {
       on: { Create: "create", Update: "update", CreateAndUpdate: "create or update", Delete: "delete" }[f.RecordTriggerType] ?? f.RecordTriggerType ?? "",
       url: f.ActiveVersionId ? links.flow(f.ActiveVersionId) : links.flows,
     })) : [];
-  if (!flows.ok) notes.push(`Couldn't read record-triggered flows: ${flows.error}`);
+  if (!flows.ok) notes.push(tr("Couldn't read record-triggered flows: {error}", { error: flows.error }));
 
   const validationRules = vrs.ok ? vrs.value.map((v) => ({ name: v.ValidationName, active: v.Active, message: v.ErrorMessage, description: v.Description || "",
     url: v.Id ? links.validationRule(v.Id) : null })) : [];
-  if (!vrs.ok) notes.push(`Couldn't read validation rules: ${vrs.error}`);
+  if (!vrs.ok) notes.push(tr("Couldn't read validation rules: {error}", { error: vrs.error }));
 
   const workflowRules = wfr.ok ? wfr.value.map((w) => ({ name: w.Name, url: w.Id ? links.workflowRule(w.Id) : null })) : [];
-  if (!wfr.ok) notes.push(`Couldn't read workflow rules: ${wfr.error}`);
+  if (!wfr.ok) notes.push(tr("Couldn't read workflow rules: {error}", { error: wfr.error }));
 
   return {
     sobject, label: desc.label, labelPlural: desc.labelPlural, custom: desc.custom, keyPrefix: desc.keyPrefix, url: links.object,
@@ -146,18 +150,18 @@ const isUrl = (u) => typeof u === "string" && /^https:\/\/[^\s"'<>]+$/.test(u);
 export function toMermaid(doc, { links = false } = {}) {
   const steps = [];
   const add = (title, items) => { if (items.length) steps.push({ title, items }); };
-  const flowsAt = (t) => doc.flows.filter((f) => f.timing === t).map((f) => ({ text: `Flow: ${f.label} (${f.on})`, url: f.url }));
+  const flowsAt = (t) => doc.flows.filter((f) => f.timing === t).map((f) => ({ text: tr("Flow: {label} ({on})", { label: f.label, on: tr(f.on) }), url: f.url }));
   const trigAt = (prefix) => doc.triggers.filter((t) => t.active && t.events.some((e) => e.startsWith(prefix) && !e.includes("delete") && !e.includes("undelete")))
-    .map((t) => ({ text: `Trigger: ${t.name}`, url: t.url }));
+    .map((t) => ({ text: tr("Trigger: {name}", { name: t.name }), url: t.url }));
 
-  add("1. Before-save flows", flowsAt("before save"));
-  add("2. Before triggers", trigAt("before"));
-  add("3. Validation rules", doc.validationRules.filter((v) => v.active).map((v) => ({ text: v.name, url: v.url })));
-  add("4. After triggers", trigAt("after"));
-  add("5. Workflow rules", doc.workflowRules.map((w) => ({ text: w.name, url: w.url })));
-  add("6. After-save flows", flowsAt("after save"));
+  add(tr("1. Before-save flows"), flowsAt("before save"));
+  add(tr("2. Before triggers"), trigAt("before"));
+  add(tr("3. Validation rules"), doc.validationRules.filter((v) => v.active).map((v) => ({ text: v.name, url: v.url })));
+  add(tr("4. After triggers"), trigAt("after"));
+  add(tr("5. Workflow rules"), doc.workflowRules.map((w) => ({ text: w.name, url: w.url })));
+  add(tr("6. After-save flows"), flowsAt("after save"));
 
-  const lines = ["flowchart TD", `  save(["Save ${mmd(doc.label)}"])`];
+  const lines = ["flowchart TD", `  save(["${mmd(tr("Save {label}", { label: doc.label }))}"])`];
   const clicks = [];
   let prev = "save";
   steps.forEach((s, i) => {
@@ -171,7 +175,7 @@ export function toMermaid(doc, { links = false } = {}) {
     lines.push(`  ${prev} --> ${id}`);
     prev = id;
   });
-  lines.push(`  ${prev} --> commit(["Commit"])`);
+  lines.push(`  ${prev} --> commit(["${mmd(tr("Commit"))}"])`);
   return [...lines, ...clicks].join("\n");
 }
 
@@ -187,13 +191,13 @@ const mdCell = (c) => {
 };
 const mdTable = (cols, rows) => rows.length
   ? [`| ${cols.join(" | ")} |`, `| ${cols.map(() => "---").join(" | ")} |`, ...rows.map((r) => `| ${r.map(mdCell).join(" | ")} |`)].join("\n")
-  : "_None._";
-const yes = (b) => (b ? "Yes" : "");
+  : `_${tr("None.")}_`;
+const yes = (b) => (b ? tr("Yes") : "");
 
 // Rows shared by Markdown and HTML.
 const rowsFor = {
-  triggers: (d) => d.triggers.map((t) => [cell(t.name, t.url), yes(t.active), t.events.join(", ")]),
-  flows: (d) => d.flows.map((f) => [cell(f.label, f.url), f.name, f.timing, f.on, f.description]),
+  triggers: (d) => d.triggers.map((t) => [cell(t.name, t.url), yes(t.active), t.events.map((e) => tr(e)).join(", ")]),
+  flows: (d) => d.flows.map((f) => [cell(f.label, f.url), f.name, tr(f.timing), tr(f.on), f.description]),
   validationRules: (d) => d.validationRules.map((v) => [cell(v.name, v.url), yes(v.active), v.message]),
   workflowRules: (d) => d.workflowRules.map((w) => [cell(w.name, w.url)]),
   recordTypes: (d) => d.recordTypes.map((r) => [cell(r.name, r.url), r.developerName, yes(r.active), yes(r.isDefault)]),
@@ -209,31 +213,34 @@ const COLS = {
 };
 
 export function toMarkdown(doc) {
-  const t = (k) => mdTable(COLS[k], rowsFor[k](doc));
+  const t = (k) => mdTable(COLS[k].map((c) => tr(c)), rowsFor[k](doc));
   return [
     `# ${doc.label} (\`${doc.sobject}\`)`,
     "",
-    `${doc.custom ? "Custom" : "Standard"} object · Key prefix ${doc.keyPrefix ?? "—"} · ${doc.fields.length} fields · Generated ${doc.generatedAt.slice(0, 10)} by OrgClearance`,
-    ...(isUrl(doc.url) ? ["", `[Open in Object Manager](${doc.url})`] : []),
+    summaryLine(doc),
+    ...(isUrl(doc.url) ? ["", `[${tr("Open in Object Manager")}](${doc.url})`] : []),
     "",
-    "Names link to their page in Salesforce Setup (you need to be logged into the org).",
+    tr("Names link to their page in Salesforce Setup (you need to be logged into the org)."),
     "",
-    "## Automation (save order)",
+    `## ${tr("Automation (save order)")}`,
     "",
     "```mermaid",
     toMermaid(doc),
     "```",
     "",
-    "### Apex triggers", t("triggers"), "",
-    "### Record-triggered flows", t("flows"), "",
-    "### Validation rules", t("validationRules"), "",
-    "### Workflow rules (legacy)", t("workflowRules"), "",
-    "## Record types", t("recordTypes"), "",
-    "## Fields", t("fields"),
-    ...(doc.notes.length ? ["", "## Notes", ...doc.notes.map((n) => `- ${n}`)] : []),
+    `### ${tr("Apex triggers")}`, t("triggers"), "",
+    `### ${tr("Record-triggered flows")}`, t("flows"), "",
+    `### ${tr("Validation rules")}`, t("validationRules"), "",
+    `### ${tr("Workflow rules (legacy)")}`, t("workflowRules"), "",
+    `## ${tr("Record types")}`, t("recordTypes"), "",
+    `## ${tr("Fields")}`, t("fields"),
+    ...(doc.notes.length ? ["", `## ${tr("Notes")}`, ...doc.notes.map((n) => `- ${n}`)] : []),
     "",
   ].join("\n");
 }
+
+const summaryLine = (doc) => tr(doc.custom ? "Custom object · Key prefix {prefix} · {count} fields · Generated {date} by OrgClearance" : "Standard object · Key prefix {prefix} · {count} fields · Generated {date} by OrgClearance",
+  { prefix: doc.keyPrefix ?? "—", count: doc.fields.length, date: doc.generatedAt.slice(0, 10) });
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const htmlCell = (c) => (c && typeof c === "object")
@@ -242,13 +249,13 @@ const htmlCell = (c) => (c && typeof c === "object")
 const htmlTable = (cols, rows) => rows.length
   ? `<table><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${
       rows.map((r) => `<tr>${r.map((c) => `<td>${htmlCell(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`
-  : "<p class=muted>None.</p>";
+  : `<p class=muted>${tr("None.")}</p>`;
 
 // Self-contained page. The diagram renders with Mermaid from a CDN when online, and falls back to its source text.
 // Diagram nodes and names link to Salesforce Setup.
 export function toHtml(doc) {
-  const t = (k) => htmlTable(COLS[k], rowsFor[k](doc));
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${esc(doc.label)} · Object documentation</title>
+  const t = (k) => htmlTable(COLS[k].map((c) => tr(c)), rowsFor[k](doc));
+  return `<!DOCTYPE html><html lang="${I18N.getLang()}"><head><meta charset="utf-8"><title>${esc(tr("{label}: object documentation", { label: doc.label }))}</title>
 <style>
 body{font:14px/1.5 system-ui,sans-serif;color:#181818;max-width:1100px;margin:32px auto;padding:0 20px}
 h1{margin-bottom:4px}h2{margin-top:32px;border-bottom:1px solid #ddd;padding-bottom:4px}
@@ -257,18 +264,18 @@ th,td{border:1px solid #e2e2e2;padding:5px 8px;text-align:left;vertical-align:to
 a{color:#0b5cab}code{font-family:ui-monospace,monospace}pre.mermaid{background:#fafafa;padding:12px;border-radius:6px}
 </style></head><body>
 <h1>${esc(doc.label)} <code>${esc(doc.sobject)}</code></h1>
-<p class=muted>${doc.custom ? "Custom" : "Standard"} object · Key prefix ${esc(doc.keyPrefix ?? "—")} · ${doc.fields.length} fields · Generated ${esc(doc.generatedAt.slice(0, 10))} by OrgClearance${
-  isUrl(doc.url) ? ` · <a href="${esc(doc.url)}" target="_blank" rel="noopener">Open in Object Manager</a>` : ""}</p>
-<p class=muted>Names and diagram boxes link to their page in Salesforce Setup (you need to be logged into the org).</p>
-<h2>Automation (save order)</h2>
+<p class=muted>${esc(summaryLine(doc))}${
+  isUrl(doc.url) ? ` · <a href="${esc(doc.url)}" target="_blank" rel="noopener">${esc(tr("Open in Object Manager"))}</a>` : ""}</p>
+<p class=muted>${esc(tr("Names and diagram boxes link to their page in Salesforce Setup (you need to be logged into the org)."))}</p>
+<h2>${esc(tr("Automation (save order)"))}</h2>
 <pre class="mermaid">${esc(toMermaid(doc, { links: true }))}</pre>
-<h3>Apex triggers</h3>${t("triggers")}
-<h3>Record-triggered flows</h3>${t("flows")}
-<h3>Validation rules</h3>${t("validationRules")}
-<h3>Workflow rules (legacy)</h3>${t("workflowRules")}
-<h2>Record types</h2>${t("recordTypes")}
-<h2>Fields</h2>${t("fields")}
-${doc.notes.length ? `<h2>Notes</h2><ul>${doc.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
+<h3>${esc(tr("Apex triggers"))}</h3>${t("triggers")}
+<h3>${esc(tr("Record-triggered flows"))}</h3>${t("flows")}
+<h3>${esc(tr("Validation rules"))}</h3>${t("validationRules")}
+<h3>${esc(tr("Workflow rules (legacy)"))}</h3>${t("workflowRules")}
+<h2>${esc(tr("Record types"))}</h2>${t("recordTypes")}
+<h2>${esc(tr("Fields"))}</h2>${t("fields")}
+${doc.notes.length ? `<h2>${esc(tr("Notes"))}</h2><ul>${doc.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
 <script src="${MERMAID.src}" integrity="${MERMAID.integrity}" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>try{mermaid.initialize({startOnLoad:true,securityLevel:"antiscript"});}catch(e){}</script>
 </body></html>`;

@@ -3,6 +3,11 @@
 //
 // Each section: { id, title, description, columns, rows: string[][], status: "ok" | "error", error? }
 
+import "../i18n.js";
+
+const I18N = globalThis.OrgClearanceI18n;
+const t = (k, v) => I18N.t(k, v);
+
 const POWER_PERMS = [
   ["PermissionsModifyAllData", "Modify All Data"],
   ["PermissionsViewAllData", "View All Data"],
@@ -13,7 +18,8 @@ const POWER_PERMS = [
 
 const day = (d) => (d ? String(d).slice(0, 10) : "");
 
-async function section(meta, fn) {
+async function section(raw, fn) {
+  const meta = { ...raw, title: t(raw.title), description: t(raw.description), columns: raw.columns.map((c) => t(c)) };
   try { return { ...meta, status: "ok", rows: await fn() }; }
   catch (e) { return { ...meta, status: "error", error: e.message || String(e), rows: [] }; }
 }
@@ -37,9 +43,9 @@ export async function loadPermSetContext(client) {
   const byId = new Map(permSets.map((p) => [p.Id, p]));
   const label = (p) => {
     if (!p) return "?";
-    if (p.IsOwnedByProfile) return `Profile: ${p.Profile?.Name ?? p.Label}`;
-    if (p.PermissionSetGroupId) return `Group: ${groupLabel.get(p.PermissionSetGroupId) ?? p.Label}`;
-    return `Permission set: ${p.Label}`;
+    if (p.IsOwnedByProfile) return t("Profile: {name}", { name: p.Profile?.Name ?? p.Label });
+    if (p.PermissionSetGroupId) return t("Group: {name}", { name: groupLabel.get(p.PermissionSetGroupId) ?? p.Label });
+    return t("Permission set: {name}", { name: p.Label });
   };
   return { permSets, byId, activeCount, inGroup, label };
 }
@@ -48,7 +54,7 @@ export async function runAudit(client) {
   /** @type {{ok: boolean, v?: any, e?: any}} */
   const ctxResult = await loadPermSetContext(client).then((v) => ({ ok: true, v }), (e) => ({ ok: false, e }));
   const needCtx = (fn) => async () => {
-    if (!ctxResult.ok) throw new Error(`Couldn't load permission sets: ${ctxResult.e.message}`);
+    if (!ctxResult.ok) throw new Error(t("Couldn't load permission sets: {error}", { error: ctxResult.e.message }));
     return fn(ctxResult.v);
   };
 
@@ -69,8 +75,8 @@ export async function runAudit(client) {
       for (const r of rows) {
         const u = users.get(r.AssigneeId) ?? { r, perms: new Set(), from: new Set() };
         POWER_PERMS.forEach(([f, name]) => { if (r.PermissionSet?.[f]) u.perms.add(name); });
-        u.from.add(r.PermissionSet?.IsOwnedByProfile ? `Profile: ${r.PermissionSet.Profile?.Name}`
-          : r.PermissionSetGroup ? `Group: ${r.PermissionSetGroup.MasterLabel}` : `Permission set: ${r.PermissionSet?.Label}`);
+        u.from.add(r.PermissionSet?.IsOwnedByProfile ? t("Profile: {name}", { name: r.PermissionSet.Profile?.Name })
+          : r.PermissionSetGroup ? t("Group: {name}", { name: r.PermissionSetGroup.MasterLabel }) : t("Permission set: {name}", { name: r.PermissionSet?.Label }));
         users.set(r.AssigneeId, u);
       }
       return [...users.values()]
@@ -117,7 +123,7 @@ export async function runAudit(client) {
     }, needCtx(async (ctx) => ctx.permSets
       .filter((p) => p.IsOwnedByProfile && !ctx.activeCount.get(p.Id))
       .sort((a, b) => Number(b.IsCustom) - Number(a.IsCustom) || (a.Profile?.Name ?? "").localeCompare(b.Profile?.Name ?? ""))
-      .map((p) => [p.Profile?.Name ?? p.Label, p.Profile?.UserLicense?.Name ?? "", p.IsCustom ? "Yes" : "No"]))),
+      .map((p) => [p.Profile?.Name ?? p.Label, p.Profile?.UserLicense?.Name ?? "", p.IsCustom ? t("Yes") : t("No")]))),
 
     section({
       id: "duplicate-permsets",
@@ -154,7 +160,7 @@ export async function runAudit(client) {
       "SELECT Name, Username, Profile.Name, LastLoginDate, CreatedDate FROM User " +
       "WHERE IsActive = true AND UserType = 'Standard' AND (LastLoginDate < LAST_N_DAYS:90 OR LastLoginDate = null) " +
       "ORDER BY LastLoginDate NULLS FIRST LIMIT 2000"))
-      .map((u) => [u.Name, u.Username, u.Profile?.Name ?? "", day(u.LastLoginDate) || "Never", day(u.CreatedDate)])),
+      .map((u) => [u.Name, u.Username, u.Profile?.Name ?? "", day(u.LastLoginDate) || t("Never"), day(u.CreatedDate)])),
   ]);
 }
 

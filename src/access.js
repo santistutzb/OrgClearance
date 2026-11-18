@@ -4,7 +4,11 @@
 //
 // Golden rule: if a piece of data couldn't be fetched, the status is "unknown". Never guess.
 
+import "../i18n.js";
 import { queryIn } from "./api.js";
+
+const I18N = globalThis.OrgClearanceI18n;
+const t = (k, v) => I18N.t(k, v);
 // Circular with suggest.js (it uses attempt from here); safe because both only call each other at runtime.
 import { suggestFixes } from "./suggest.js";
 import { screenCheck } from "./screen.js";
@@ -12,8 +16,8 @@ import { screenCheck } from "./screen.js";
 const ID_RE = /^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$/;
 const NAME_RE = /^[A-Za-z0-9_]+$/;
 
-function assertId(v, what) { if (!ID_RE.test(v || "")) throw new Error(`Invalid ${what}`); return v; }
-function assertName(v, what) { if (!NAME_RE.test(v || "")) throw new Error(`Invalid ${what}`); return v; }
+function assertId(v, what) { if (!ID_RE.test(v || "")) throw new Error(t("Invalid {what}", { what: t(what) })); return v; }
+function assertName(v, what) { if (!NAME_RE.test(v || "")) throw new Error(t("Invalid {what}", { what: t(what) })); return v; }
 // Query with an IN (...) list, split into chunks for large orgs.
 const qIn = (client, build, ids) => queryIn((q) => client.query(q), build, ids);
 export const escapeSoql = (s) => String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
@@ -47,7 +51,7 @@ export async function searchUsers(client, term) {
 
 export async function getUser(client, userId) {
   const rows = await client.query(`SELECT ${USER_FIELDS} FROM User WHERE Id = '${assertId(userId, "user")}'`);
-  if (!rows.length) throw new Error("User not found");
+  if (!rows.length) throw new Error(t("User not found"));
   return mapUser(rows[0]);
 }
 
@@ -73,11 +77,11 @@ export async function loadSources(client, userId, now = Date.now()) {
       s = { id: r.PermissionSetId, kind: "profile", label: r.PermissionSet.Profile?.Name ?? "Profile" };
     } else if (r.PermissionSetGroupId) {
       s = {
-        id: r.PermissionSetId, kind: "group", label: r.PermissionSetGroup?.MasterLabel ?? "Permission set group",
+        id: r.PermissionSetId, kind: "group", label: r.PermissionSetGroup?.MasterLabel ?? t("Permission set group"),
         groupId: r.PermissionSetGroupId, groupStatus: r.PermissionSetGroup?.Status ?? null,
       };
     } else {
-      s = { id: r.PermissionSetId, kind: "permset", label: r.PermissionSet?.Label ?? "Permission set" };
+      s = { id: r.PermissionSetId, kind: "permset", label: r.PermissionSet?.Label ?? t("Permission set") };
     }
     if (r.ExpirationDate) s.expiresAt = r.ExpirationDate;
     (r.ExpirationDate && Date.parse(r.ExpirationDate) <= now ? expired : active).push(s);
@@ -157,9 +161,9 @@ async function fieldCheck(client, src, sobject, field) {
   const desc = await attempt(() => client.describe(sobject));
   if (!desc.ok) return { status: "unknown", error: desc.error };
   const meta = desc.value.fields.find((f) => f.name.toLowerCase() === field.toLowerCase());
-  if (!meta) return { status: "unknown", error: `Field ${field} doesn't exist on ${sobject} (or you can't see it).` };
+  if (!meta) return { status: "unknown", error: t("Field {field} doesn't exist on {sobject} (or you can't see it).", { field, sobject }) };
   if (meta.permissionable === false) {
-    return { status: "na", note: "This field doesn't use field-level security: it's visible whenever the object is." };
+    return { status: "na", note: t("This field doesn't use field-level security: it's visible whenever the object is.") };
   }
   const res = await permRows(client, src,
     `SELECT ParentId, PermissionsRead, PermissionsEdit FROM FieldPermissions ` +
@@ -243,7 +247,7 @@ async function recordCheck(client, { user, src, sobject, recordId, objectInfo })
     const r = ura.value[0];
     Object.assign(result, { status: r.HasReadAccess ? "yes" : "no", hasEdit: r.HasEditAccess, hasDelete: r.HasDeleteAccess, maxAccessLevel: r.MaxAccessLevel });
   } else {
-    Object.assign(result, { status: "unknown", error: ura.ok ? "Salesforce returned no access row for this record." : ura.error });
+    Object.assign(result, { status: "unknown", error: ura.ok ? t("Salesforce returned no access row for this record.") : ura.error });
   }
 
   // 2. Permissions that bypass sharing.
@@ -254,16 +258,16 @@ async function recordCheck(client, { user, src, sobject, recordId, objectInfo })
     if (sys.ok) {
       for (const p of sys.value) {
         const s = src.active.find((x) => x.id === p.Id);
-        if (p.PermissionsModifyAllData) result.reasons.push({ type: "bypass", text: `Modify All Data from ${s.label}` });
-        else if (p.PermissionsViewAllData) result.reasons.push({ type: "bypass", text: `View All Data from ${s.label}` });
+        if (p.PermissionsModifyAllData) result.reasons.push({ type: "bypass", text: t("Modify All Data from {source}", { source: s.label }) });
+        else if (p.PermissionsViewAllData) result.reasons.push({ type: "bypass", text: t("View All Data from {source}", { source: s.label }) });
       }
     } else {
-      result.notes.push(`Couldn't check View/Modify All Data: ${sys.error}`);
+      result.notes.push(t("Couldn't check View/Modify All Data: {error}", { error: sys.error }));
     }
   }
-  for (const s of objectInfo?.modifyAllBy ?? []) result.reasons.push({ type: "bypass", text: `Modify All on this object from ${s.label}` });
+  for (const s of objectInfo?.modifyAllBy ?? []) result.reasons.push({ type: "bypass", text: t("Modify All on this object from {source}", { source: s.label }) });
   for (const s of objectInfo?.viewAllBy ?? []) {
-    if (!objectInfo.modifyAllBy?.some((m) => m.label === s.label)) result.reasons.push({ type: "bypass", text: `View All on this object from ${s.label}` });
+    if (!objectInfo.modifyAllBy?.some((m) => m.label === s.label)) result.reasons.push({ type: "bypass", text: t("View All on this object from {source}", { source: s.label }) });
   }
 
   // 3. Org-wide default.
@@ -271,11 +275,11 @@ async function recordCheck(client, { user, src, sobject, recordId, objectInfo })
     `SELECT InternalSharingModel, ExternalSharingModel FROM EntityDefinition WHERE QualifiedApiName = '${sobject}'`));
   if (owd.ok && owd.value.length) {
     const model = user.userType === "Standard" ? owd.value[0].InternalSharingModel : owd.value[0].ExternalSharingModel;
-    result.owd = { model, label: OWD_LABEL[model] ?? model, audience: user.userType === "Standard" ? "internal" : "external" };
-    if (PUBLIC_OWD.has(model)) result.reasons.push({ type: "owd", text: `Org-wide default is ${result.owd.label}` });
-    if (model === "ControlledByParent") result.notes.push("Access to this record is inherited from its master (parent) record. Check access to the parent.");
+    result.owd = { model, label: OWD_LABEL[model] ? t(OWD_LABEL[model]) : model, audience: user.userType === "Standard" ? "internal" : "external" };
+    if (PUBLIC_OWD.has(model)) result.reasons.push({ type: "owd", text: t("Org-wide default is {label}", { label: result.owd.label }) });
+    if (model === "ControlledByParent") result.notes.push(t("Access to this record is inherited from its master (parent) record. Check access to the parent."));
   } else {
-    result.notes.push(`Couldn't read the org-wide default: ${owd.ok ? "no result" : owd.error}`);
+    result.notes.push(t("Couldn't read the org-wide default: {error}", { error: owd.ok ? t("no result") : owd.error }));
   }
 
   // 4. Owner.
@@ -284,12 +288,12 @@ async function recordCheck(client, { user, src, sobject, recordId, objectInfo })
   if (own.ok && own.value.length) {
     ownerId = own.value[0].OwnerId;
     result.ownerId = ownerId;
-    if (ownerId === user.id) result.reasons.push({ type: "owner", text: "Owns the record" });
+    if (ownerId === user.id) result.reasons.push({ type: "owner", text: t("Owns the record") });
   }
 
   // 5. Groups (needed for shares) and role hierarchy.
   const groups = await attempt(() => userGroups(client, user));
-  if (!groups.ok) result.notes.push(`Couldn't load the user's groups and roles: ${groups.error}`);
+  if (!groups.ok) result.notes.push(t("Couldn't load the user's groups and roles: {error}", { error: groups.error }));
 
   if (groups.ok && ownerId?.startsWith("005") && ownerId !== user.id && user.roleId) {
     const ownerRow = await attempt(() => client.query(`SELECT UserRoleId, UserRole.Name FROM User WHERE Id = '${ownerId}'`));
@@ -298,8 +302,8 @@ async function recordCheck(client, { user, src, sobject, recordId, objectInfo })
       const custom = sobject.endsWith("__c");
       result.reasons.push({
         type: "hierarchy",
-        text: `Role ${user.roleName ?? ""} is above the owner's role (${ownerRow.value[0].UserRole?.Name ?? "?"})` +
-          (custom ? ", if \"Grant Access Using Hierarchies\" is on for this object" : ""),
+        text: t(custom ? "Role {role} is above the owner's role ({ownerRole}), if \"Grant Access Using Hierarchies\" is on for this object" : "Role {role} is above the owner's role ({ownerRole})",
+          { role: user.roleName ?? "", ownerRole: ownerRow.value[0].UserRole?.Name ?? "?" }),
       });
     }
   }
@@ -315,16 +319,16 @@ async function recordCheck(client, { user, src, sobject, recordId, objectInfo })
       for (const s of shares.value) {
         if (!reach.has(s.UserOrGroupId)) continue;
         if (s.RowCause === "Owner" && s.UserOrGroupId === user.id) continue; // already counted
-        const via = s.UserOrGroupId === user.id ? "directly" : `via group ${groupNames.get(s.UserOrGroupId) ?? s.UserOrGroupId}`;
-        result.reasons.push({ type: "share", text: `${ROW_CAUSE[s.RowCause] ?? `Apex sharing reason "${s.RowCause}"`} (${s[level]}, ${via})` });
+        const via = s.UserOrGroupId === user.id ? t("directly") : t("via group {group}", { group: groupNames.get(s.UserOrGroupId) ?? s.UserOrGroupId });
+        result.reasons.push({ type: "share", text: `${ROW_CAUSE[s.RowCause] ? t(ROW_CAUSE[s.RowCause]) : t("Apex sharing reason \"{reason}\"", { reason: s.RowCause })} (${s[level]}, ${via})` });
       }
     } else {
-      result.notes.push(`Couldn't read ${table}: ${shares.error}`);
+      result.notes.push(t("Couldn't read {table}: {error}", { table, error: shares.error }));
     }
   }
 
   if (result.status === "yes" && !result.reasons.length) {
-    result.notes.push("Salesforce grants access, but none of the checked mechanisms explains it (it could be territories, implicit sharing or a portal role). Not traced yet.");
+    result.notes.push(t("Salesforce grants access, but none of the checked mechanisms explains it (it could be territories, implicit sharing or a portal role). Not traced yet."));
   }
   return result;
 }
@@ -380,12 +384,12 @@ export async function explainAccess(client, { userId, sobject, recordId, field }
 
 export function buildVerdict(r) {
   const reasons = [];
-  if (!r.user.isActive) reasons.push("The user is inactive and can't log in.");
+  if (!r.user.isActive) reasons.push(t("The user is inactive and can't log in."));
 
   const checks = [
-    ["object", r.object, `No read permission on the ${r.sobject} object.`],
-    ["field", r.fieldAccess, `No profile or permission set grants read on field ${r.field}.`],
-    ["record", r.record, "Sharing doesn't give access to this record."],
+    ["object", r.object, t("No read permission on the {sobject} object.", { sobject: r.sobject })],
+    ["field", r.fieldAccess, t("No profile or permission set grants read on field {field}.", { field: r.field })],
+    ["record", r.record, t("Sharing doesn't give access to this record.")],
   ].filter(([, c]) => c && c.status !== "skipped" && c.status !== "na");
 
   for (const [, c, msg] of checks) {
@@ -393,8 +397,8 @@ export function buildVerdict(r) {
     reasons.push(msg);
     for (const m of c.muted ?? []) {
       reasons.push(m.outdated
-        ? `Permission set group "${m.group}" includes it (${m.components.join(", ")}) but the group is outdated: it needs recalculation.`
-        : `Permission set group "${m.group}" includes it (${m.components.join(", ")}) but mutes it.`);
+        ? t("Permission set group \"{group}\" includes it ({components}) but the group is outdated: it needs recalculation.", { group: m.group, components: m.components.join(", ") })
+        : t("Permission set group \"{group}\" includes it ({components}) but mutes it.", { group: m.group, components: m.components.join(", ") }));
     }
   }
   const unknown = checks.filter(([, c]) => c.status === "unknown");
@@ -403,16 +407,16 @@ export function buildVerdict(r) {
   if (r.screen?.status === "no") {
     const where = r.screen.layout ? ` (${r.screen.layout.name})` : "";
     reasons.push(reasons.length
-      ? `It also isn't on their page layout${where}.`
-      : `They have access to ${r.field}, but it isn't on their page layout${where}, so the record page doesn't show it.`);
+      ? t("It also isn't on their page layout{where}.", { where })
+      : t("They have access to {field}, but it isn't on their page layout{where}, so the record page doesn't show it.", { field: r.field, where }));
   }
 
   if (reasons.length) {
-    if (r.expired?.length) reasons.push(`Expired assignments, not counted: ${r.expired.map((s) => s.label).join(", ")}.`);
+    if (r.expired?.length) reasons.push(t("Expired assignments, not counted: {list}.", { list: r.expired.map((s) => s.label).join(", ") }));
     return { status: "no", reasons };
   }
   if (unknown.length) {
-    return { status: "unknown", reasons: unknown.map(([name, c]) => `Couldn't verify (${name}): ${c.error}`) };
+    return { status: "unknown", reasons: unknown.map(([name, c]) => t("Couldn't verify ({check}): {error}", { check: t(name), error: c.error })) };
   }
   return { status: "yes", reasons: [] };
 }
@@ -439,7 +443,7 @@ export async function compareUsers(client, { userIdA, userIdB, sobject, recordId
     if (winner && name !== "Record") {
       const missing = new Set((winner === a ? onlyA : onlyB).map(key));
       const from = (wc.readBy ?? []).filter((s) => missing.has(key(s))).map((s) => s.label);
-      if (from.length) explanation = `${winner.user.name} gets it from ${from.join(", ")}, which ${loser.user.name} doesn't have.`;
+      if (from.length) explanation = t("{winner} gets it from {sources}, which {loser} doesn't have.", { winner: winner.user.name, sources: from.join(", "), loser: loser.user.name });
     }
     if (winner && name === "Record") {
       const texts = wc.reasons.map((x) => x.text);
@@ -490,7 +494,7 @@ export async function resolveObject(client, recordId) {
   assertId(recordId, "record");
   const global = await client.describeGlobal();
   const hit = global.sobjects.find((s) => s.keyPrefix === recordId.slice(0, 3));
-  if (!hit) throw new Error("Couldn't identify this record's object.");
+  if (!hit) throw new Error(t("Couldn't identify this record's object."));
   return hit.name;
 }
 

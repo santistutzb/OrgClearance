@@ -16,6 +16,11 @@ export function historyInfo(sobject) {
   return { table: `${sobject}History`, parent: `${sobject}Id` };
 }
 
+import "../i18n.js";
+
+const I18N = globalThis.OrgClearanceI18n;
+const t = (k, v) => I18N.t(k, v);
+
 const SPECIAL_FIELDS = { created: "Record created", locked: "Record locked", unlocked: "Record unlocked", ownerAccepted: "Owner accepted", ownerAssignment: "Owner assigned" };
 const short = (v) => {
   if (v === null || v === undefined || v === "") return "(empty)";
@@ -24,8 +29,8 @@ const short = (v) => {
 };
 
 export async function buildTimeline(client, { sobject, recordId }) {
-  if (!NAME_RE.test(sobject || "")) throw new Error("Invalid object");
-  if (!ID_RE.test(recordId || "")) throw new Error("Invalid record");
+  if (!NAME_RE.test(sobject || "")) throw new Error(t("Invalid {what}", { what: t("object") }));
+  if (!ID_RE.test(recordId || "")) throw new Error(t("Invalid {what}", { what: t("record") }));
   const events = [];
   const notes = [];
   const push = (at, who, kind, text) => { if (at) events.push({ at, who: who ?? "", kind, text }); };
@@ -37,10 +42,10 @@ export async function buildTimeline(client, { sobject, recordId }) {
     `SELECT CreatedDate, CreatedBy.Name, LastModifiedDate, LastModifiedBy.Name FROM ${sobject} WHERE Id = '${recordId}'`));
   if (rec.ok && rec.value[0]) {
     const r = rec.value[0];
-    push(r.CreatedDate, r.CreatedBy?.Name, "created", "Record created");
-    if (r.LastModifiedDate !== r.CreatedDate) push(r.LastModifiedDate, r.LastModifiedBy?.Name, "modified", "Last modified (any field, tracked or not)");
+    push(r.CreatedDate, r.CreatedBy?.Name, "created", t("Record created"));
+    if (r.LastModifiedDate !== r.CreatedDate) push(r.LastModifiedDate, r.LastModifiedBy?.Name, "modified", t("Last modified (any field, tracked or not)"));
   } else {
-    notes.push(`Couldn't read created/modified info: ${rec.ok ? "record not found" : rec.error}`);
+    notes.push(t("Couldn't read created/modified info: {error}", { error: rec.ok ? t("record not found") : rec.error }));
   }
 
   const { table, parent } = historyInfo(sobject);
@@ -53,13 +58,13 @@ export async function buildTimeline(client, { sobject, recordId }) {
       if (h.DataType === "EntityId") continue; // lookups come twice: as Ids and as names; keep names
       if (h.Field === "created") continue; // already shown from CreatedDate
       tracked++;
-      const label = SPECIAL_FIELDS[h.Field] ?? labelOf.get(String(h.Field).toLowerCase()) ?? h.Field;
+      const label = SPECIAL_FIELDS[h.Field] ? t(SPECIAL_FIELDS[h.Field]) : labelOf.get(String(h.Field).toLowerCase()) ?? h.Field;
       push(h.CreatedDate, h.CreatedBy?.Name, "field",
         SPECIAL_FIELDS[h.Field] ? label : `${label}: ${short(h.OldValue)} → ${short(h.NewValue)}`);
     }
-    if (!tracked) notes.push("No field history. Changes are only recorded for fields with history tracking turned on.");
+    if (!tracked) notes.push(t("No field history. Changes are only recorded for fields with history tracking turned on."));
   } else {
-    notes.push(`No field history available (${table}): ${hist.error}. History tracking may be off for this object.`);
+    notes.push(t("No field history available ({table}): {error}. History tracking may be off for this object.", { table, error: hist.error }));
   }
 
   const [tasks, evts, emails] = await Promise.all([
@@ -70,10 +75,10 @@ export async function buildTimeline(client, { sobject, recordId }) {
     attempt(() => client.query(
       `SELECT Subject, FromAddress, Incoming, MessageDate, CreatedBy.Name FROM EmailMessage WHERE RelatedToId = '${recordId}' ORDER BY MessageDate DESC LIMIT 200`)),
   ]);
-  if (tasks.ok) tasks.value.forEach((t) => push(t.CreatedDate, t.CreatedBy?.Name, "activity", `${t.TaskSubtype === "Call" ? "Call" : "Task"}: ${t.Subject ?? "(no subject)"}${t.Status ? ` [${t.Status}]` : ""}`));
-  if (evts.ok) evts.value.forEach((e) => push(e.CreatedDate, e.CreatedBy?.Name, "activity", `Event: ${e.Subject ?? "(no subject)"}`));
-  if (emails.ok) emails.value.forEach((m) => push(m.MessageDate, m.Incoming ? m.FromAddress : m.CreatedBy?.Name, "email", `${m.Incoming ? "Email received" : "Email sent"}: ${m.Subject ?? "(no subject)"}`));
-  if (!emails.ok && !/not supported|No such column|sObject type 'EmailMessage'/i.test(emails.error)) notes.push(`Couldn't read emails: ${emails.error}`);
+  if (tasks.ok) tasks.value.forEach((k) => push(k.CreatedDate, k.CreatedBy?.Name, "activity", `${t(k.TaskSubtype === "Call" ? "Call" : "Task")}: ${k.Subject ?? t("(no subject)")}${k.Status ? ` [${k.Status}]` : ""}`));
+  if (evts.ok) evts.value.forEach((e) => push(e.CreatedDate, e.CreatedBy?.Name, "activity", `${t("Event")}: ${e.Subject ?? t("(no subject)")}`));
+  if (emails.ok) emails.value.forEach((m) => push(m.MessageDate, m.Incoming ? m.FromAddress : m.CreatedBy?.Name, "email", `${t(m.Incoming ? "Email received" : "Email sent")}: ${m.Subject ?? t("(no subject)")}`));
+  if (!emails.ok && !/not supported|No such column|sObject type 'EmailMessage'/i.test(emails.error)) notes.push(t("Couldn't read emails: {error}", { error: emails.error }));
 
   events.sort((x, y) => String(y.at).localeCompare(String(x.at)));
   return { sobject, recordId, events, notes };
@@ -102,7 +107,7 @@ export function parseLog(body, recordId) {
 }
 
 export async function scanLogs(client, { recordId, limit = 20 }) {
-  if (!ID_RE.test(recordId || "")) throw new Error("Invalid record");
+  if (!ID_RE.test(recordId || "")) throw new Error(t("Invalid {what}", { what: t("record") }));
   const n = Math.max(1, Math.min(50, Number(limit) || 20));
   const logs = await client.query(
     "SELECT Id, StartTime, LogUser.Name, Operation, Status, LogLength FROM ApexLog " +

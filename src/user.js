@@ -4,6 +4,10 @@
 
 import { getUser, loadSources, userGroups, permRows, whoGrants, attempt } from "./access.js";
 import { queryIn } from "./api.js";
+import "../i18n.js";
+
+const I18N = globalThis.OrgClearanceI18n;
+const t = (k, v) => I18N.t(k, v);
 
 const ID_RE = /^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$/;
 
@@ -23,7 +27,7 @@ const FLAGS = [
 
 /** @param {any} client @param {{userId: string}} p */
 export async function userOverview(client, { userId }) {
-  if (!ID_RE.test(userId || "")) throw new Error("Invalid user");
+  if (!ID_RE.test(userId || "")) throw new Error(t("Invalid {what}", { what: t("user") }));
   const user = await getUser(client, userId);
   const src = await loadSources(client, userId);
   const ids = src.active.map((s) => s.id);
@@ -41,7 +45,7 @@ export async function userOverview(client, { userId }) {
       const batch = fields.slice(i, i + 80);
       const rows = await attempt(() => queryIn((q) => client.query(q),
         (list) => `SELECT Id, ${batch.map((f) => f.name).join(", ")} FROM PermissionSet WHERE Id IN (${list})`, ids));
-      if (!rows.ok) { notes.push(`Some system permissions couldn't be read: ${rows.error}`); continue; }
+      if (!rows.ok) { notes.push(t("Some system permissions couldn't be read: {error}", { error: rows.error })); continue; }
       for (const r of rows.value) byPs.set(r.Id, { ...(byPs.get(r.Id) ?? {}), ...r });
     }
     systemPerms = fields
@@ -50,7 +54,7 @@ export async function userOverview(client, { userId }) {
       .filter((p) => p.by.length)
       .sort((a, b) => Number(b.sensitive) - Number(a.sensitive) || a.label.localeCompare(b.label));
   } else if (!desc.ok) {
-    notes.push(`Couldn't read system permissions: ${desc.error}`);
+    notes.push(t("Couldn't read system permissions: {error}", { error: desc.error }));
   }
 
   // Object access across every object.
@@ -70,7 +74,7 @@ export async function userOverview(client, { userId }) {
       return o;
     }).filter((o) => o.read).sort((a, b) => a.sobject.localeCompare(b.sobject));
   } else {
-    notes.push(`Couldn't read object permissions: ${op.error}`);
+    notes.push(t("Couldn't read object permissions: {error}", { error: op.error }));
   }
 
   // Groups, queues and role.
@@ -81,9 +85,9 @@ export async function userOverview(client, { userId }) {
       (list) => `SELECT Id, Name, DeveloperName, Type FROM Group WHERE Id IN (${list}) AND Type IN ('Regular', 'Queue')`, [...g.value.groupIds]));
     if (rows.ok) groups = rows.value.map((r) => ({ name: r.Name || r.DeveloperName, type: r.Type === "Queue" ? "Queue" : "Public group" }))
       .sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
-    else notes.push(`Couldn't read group names: ${rows.error}`);
+    else notes.push(t("Couldn't read group names: {error}", { error: rows.error }));
   } else if (!g.ok) {
-    notes.push(`Couldn't read groups: ${g.error}`);
+    notes.push(t("Couldn't read groups: {error}", { error: g.error }));
   }
 
   return { user, sources: src.active, expired: src.expired, systemPerms, objects, groups, notes };

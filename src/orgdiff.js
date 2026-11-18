@@ -2,6 +2,10 @@
 // snapshot() reads one org; diffSnapshots() and toMarkdownReport() are pure.
 
 import { fieldType } from "./docs.js";
+import "../i18n.js";
+
+const I18N = globalThis.OrgClearanceI18n;
+const t = (k, v) => I18N.t(k, v);
 
 const NAME_RE = /^[A-Za-z0-9_]+$/;
 
@@ -35,7 +39,7 @@ const objFlags = (r) => [["Read", r.PermissionsRead], ["Create", r.PermissionsCr
   ["View All", r.PermissionsViewAllRecords], ["Modify All", r.PermissionsModifyAllRecords]].filter(([, on]) => on).map(([n]) => n).join(", ");
 
 export async function snapshot(client, sobject) {
-  if (!NAME_RE.test(sobject || "")) throw new Error("Invalid object");
+  if (!NAME_RE.test(sobject || "")) throw new Error(t("Invalid {what}", { what: t("object") }));
   const desc = await collect(() => client.describe(sobject));
   const ent = await collect(() => client.query(`SELECT DurableId FROM EntityDefinition WHERE QualifiedApiName = '${sobject}'`));
   const durableId = ent.ok && ent.items[0]?.DurableId ? ent.items[0].DurableId : sobject;
@@ -96,19 +100,23 @@ const SECTIONS = [
   ["apexTriggers", "Apex triggers", "org"],
 ];
 
-const fmt = (v) => (v === true ? "yes" : v === false ? "no" : v === undefined || v === "" ? "—" : String(v));
+const fmt = (v) => (v === true ? t("yes") : v === false ? t("no") : v === undefined || v === "" ? "—" : String(v));
+// Property names we know get translated; anything else (like a field name in field permissions) is shown as is.
+const KNOWN_PROPS = new Set(["label", "type", "required", "unique", "externalId", "formula", "values", "helpText", "active", "message", "apiVersion", "status"]);
+const propName = (k) => (KNOWN_PROPS.has(k) ? t(k) : k);
 
 export function propDiff(a, b) {
   const out = [];
   for (const k of [...new Set([...Object.keys(a), ...Object.keys(b)])].sort()) {
     if (JSON.stringify(a[k]) === JSON.stringify(b[k])) continue;
-    out.push(k === "code" ? "code differs" : `${k}: ${fmt(a[k])} → ${fmt(b[k])}`);
+    out.push(k === "code" ? t("code differs") : `${propName(k)}: ${fmt(a[k])} → ${fmt(b[k])}`);
   }
   return out;
 }
 
 export function diffSnapshots(a, b) {
-  const sections = SECTIONS.map(([key, title, scope]) => {
+  const sections = SECTIONS.map(([key, rawTitle, scope]) => {
+    const title = t(rawTitle);
     const ca = a.collections[key], cb = b.collections[key];
     if (!ca.ok || !cb.ok) return { key, title, scope, status: "error", error: [!ca.ok && `${a.host}: ${ca.error}`, !cb.ok && `${b.host}: ${cb.error}`].filter(Boolean).join(" · ") };
     const onlyA = [], onlyB = [], changed = [];
@@ -127,17 +135,17 @@ export function diffSnapshots(a, b) {
 
 export function toMarkdownReport(d) {
   const lines = [
-    `# Org comparison: ${d.a} vs ${d.b}`, "",
-    `Object: \`${d.sobject}\` · Compared ${d.comparedAt.slice(0, 16).replace("T", " ")} UTC by OrgClearance`, "",
-    "Arrows read as: value in the first org → value in the second org.", "",
+    `# ${t("Org comparison: {a} vs {b}", { a: d.a, b: d.b })}`, "",
+    t("Object: {sobject} · Compared {date} UTC by OrgClearance", { sobject: `\`${d.sobject}\``, date: d.comparedAt.slice(0, 16).replace("T", " ") }), "",
+    t("Arrows read as: value in the first org → value in the second org."), "",
   ];
   for (const s of d.sections) {
     lines.push(`## ${s.title}`, "");
-    if (s.status === "error") { lines.push(`_Couldn't compare: ${s.error}_`, ""); continue; }
-    if (!s.onlyA.length && !s.onlyB.length && !s.changed.length) { lines.push(`_No differences (${s.total} compared)._`, ""); continue; }
-    if (s.onlyA.length) lines.push(`**Only in ${d.a}** (${s.onlyA.length})`, ...s.onlyA.map((n) => `- ${n}`), "");
-    if (s.onlyB.length) lines.push(`**Only in ${d.b}** (${s.onlyB.length})`, ...s.onlyB.map((n) => `- ${n}`), "");
-    if (s.changed.length) lines.push(`**Different** (${s.changed.length})`, ...s.changed.map((c) => `- ${c.name}: ${c.details.join("; ")}`), "");
+    if (s.status === "error") { lines.push(`_${t("Couldn't compare: {error}", { error: s.error })}_`, ""); continue; }
+    if (!s.onlyA.length && !s.onlyB.length && !s.changed.length) { lines.push(`_${t("No differences ({n} compared).", { n: s.total })}_`, ""); continue; }
+    if (s.onlyA.length) lines.push(`**${t("Only in {org}", { org: d.a })}** (${s.onlyA.length})`, ...s.onlyA.map((n) => `- ${n}`), "");
+    if (s.onlyB.length) lines.push(`**${t("Only in {org}", { org: d.b })}** (${s.onlyB.length})`, ...s.onlyB.map((n) => `- ${n}`), "");
+    if (s.changed.length) lines.push(`**${t("Different")}** (${s.changed.length})`, ...s.changed.map((c) => `- ${c.name}: ${c.details.join("; ")}`), "");
   }
   return lines.join("\n");
 }

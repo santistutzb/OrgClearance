@@ -3,7 +3,11 @@
 // Nothing here writes to Salesforce. Suggestions are ordered from "restore what was intended"
 // (expired, muted) to "reuse what exists" to "broad changes", which come with a warning.
 
+import "../i18n.js";
 import { queryIn } from "./api.js";
+
+const I18N = globalThis.OrgClearanceI18n;
+const t = (k, v) => I18N.t(k, v);
 import { attempt } from "./access.js";
 
 /** acme.my.salesforce.com -> https://acme.lightning.force.com */
@@ -26,7 +30,7 @@ export function setupUrl(apiHost, kind, id) {
   }
 }
 
-const plural = (n, word) => `${n} active user${n === 1 ? "" : "s"}`.replace("user", word ?? "user");
+const plural = (n) => I18N.tn(n, "{n} active user", "{n} active users");
 
 /**
  * Permission sets (not profiles, not group aggregates, not managed) that already grant read,
@@ -64,7 +68,7 @@ export async function suggestFixes(client, { result, src }) {
   const add = (s) => out.push(s);
 
   if (!user.isActive) {
-    add({ problem: "user", kind: "activate", title: `Reactivate ${user.name}`, detail: "Inactive users can't log in, whatever their permissions.", url: setupUrl(host, "user", user.id) });
+    add({ problem: "user", kind: "activate", title: t("Reactivate {name}", { name: user.name }), detail: t("Inactive users can't log in, whatever their permissions."), url: setupUrl(host, "user", user.id) });
   }
 
   // Expired assignments that would have granted what's missing: renewing restores intended access.
@@ -83,7 +87,7 @@ export async function suggestFixes(client, { result, src }) {
     const grantsField = new Set(missingField && fieldResult?.ok ? fieldResult.value.map((x) => x.ParentId) : []);
     for (const s of src.expired.filter((x) => grantsObject.has(x.id) || grantsField.has(x.id))) {
       s.renews = grantsObject.has(s.id) ? "object" : "field";
-      add({ problem: s.renews, kind: "renew", title: `Renew their ${s.label} assignment`, detail: `It expired${s.expiresAt ? ` on ${String(s.expiresAt).slice(0, 10)}` : ""} and would give them what's missing.`,
+      add({ problem: s.renews, kind: "renew", title: t("Renew their {label} assignment", { label: s.label }), detail: s.expiresAt ? t("It expired on {date} and would give them what's missing.", { date: String(s.expiresAt).slice(0, 10) }) : t("It expired and would give them what's missing."),
         url: setupUrl(host, s.kind === "group" ? "group" : "permset", s.kind === "group" ? s.groupId : s.id) });
     }
   }
@@ -95,12 +99,12 @@ export async function suggestFixes(client, { result, src }) {
       `FROM ObjectPermissions WHERE SobjectType = '${r.sobject}' AND PermissionsRead = true`));
     if (sets.ok) {
       for (const s of sets.value.slice(0, 2)) {
-        add({ problem: "object", kind: "assign", title: `Assign the ${s.label} permission set`, detail: `It already gives read on ${r.sobject}. Used by ${plural(s.users)}. Check what else it grants before assigning.`, url: setupUrl(host, "permset", s.id) });
+        add({ problem: "object", kind: "assign", title: t("Assign the {label} permission set", { label: s.label }), detail: t("It already gives read on {what}. Used by {users}. Check what else it grants before assigning.", { what: r.sobject, users: plural(s.users) }), url: setupUrl(host, "permset", s.id) });
       }
-    } else notes.push(`Couldn't look for permission sets that grant ${r.sobject}: ${sets.error}`);
+    } else notes.push(t("Couldn't look for permission sets that grant {what}: {error}", { what: r.sobject, error: sets.error }));
     add(ownSets.length
-      ? { problem: "object", kind: "edit", title: `Or add read on ${r.sobject} to ${ownSets[0].label}`, detail: "They already have this permission set. Everyone else assigned to it gets the same access.", url: setupUrl(host, "permset", ownSets[0].id) }
-      : { problem: "object", kind: "edit", title: `Or create a permission set with read on ${r.sobject}`, detail: "They have no custom permission sets yet, only their profile.", url: null });
+      ? { problem: "object", kind: "edit", title: t("Or add read on {what} to {label}", { what: r.sobject, label: ownSets[0].label }), detail: t("They already have this permission set. Everyone else assigned to it gets the same access."), url: setupUrl(host, "permset", ownSets[0].id) }
+      : { problem: "object", kind: "edit", title: t("Or create a permission set with read on {what}", { what: r.sobject }), detail: t("They have no custom permission sets yet, only their profile."), url: null });
   }
 
   // Field read (only meaningful once they can read the object).
@@ -108,8 +112,8 @@ export async function suggestFixes(client, { result, src }) {
     for (const m of r.fieldAccess.muted ?? []) {
       const group = src.active.find((s) => s.kind === "group" && s.label === m.group);
       add(m.outdated
-        ? { problem: "field", kind: "unmute", title: `Recalculate the ${m.group} permission set group`, detail: `${m.components.join(", ")} inside it grants ${r.field}, but the group hasn't been recalculated.`, url: group ? setupUrl(host, "group", group.groupId) : null }
-        : { problem: "field", kind: "unmute", title: `Stop muting ${r.field} in ${m.group}`, detail: `${m.components.join(", ")} inside the group grants it, but the group's muting permission set removes it. Only change this if the mute isn't intentional.`, url: group ? setupUrl(host, "group", group.groupId) : null });
+        ? { problem: "field", kind: "unmute", title: t("Recalculate the {group} permission set group", { group: m.group }), detail: t("{components} inside it grants {field}, but the group hasn't been recalculated.", { components: m.components.join(", "), field: r.field }), url: group ? setupUrl(host, "group", group.groupId) : null }
+        : { problem: "field", kind: "unmute", title: t("Stop muting {field} in {group}", { field: r.field, group: m.group }), detail: t("{components} inside the group grants it, but the group's muting permission set removes it. Only change this if the mute isn't intentional.", { components: m.components.join(", ") }), url: group ? setupUrl(host, "group", group.groupId) : null });
     }
     const sets = await attempt(() => grantingPermSets(client,
       "SELECT ParentId, Parent.Label, Parent.Name, Parent.IsOwnedByProfile, Parent.PermissionSetGroupId, Parent.NamespacePrefix " +
@@ -117,36 +121,36 @@ export async function suggestFixes(client, { result, src }) {
     if (sets.ok) {
       const mutedComponents = new Set((r.fieldAccess.muted ?? []).flatMap((m) => m.components));
       for (const s of sets.value.filter((x) => !mutedComponents.has(x.label)).slice(0, 2)) {
-        add({ problem: "field", kind: "assign", title: `Assign the ${s.label} permission set`, detail: `It already gives read on ${r.field}. Used by ${plural(s.users)}. Check what else it grants before assigning.`, url: setupUrl(host, "permset", s.id) });
+        add({ problem: "field", kind: "assign", title: t("Assign the {label} permission set", { label: s.label }), detail: t("It already gives read on {what}. Used by {users}. Check what else it grants before assigning.", { what: r.field, users: plural(s.users) }), url: setupUrl(host, "permset", s.id) });
       }
-    } else notes.push(`Couldn't look for permission sets that grant ${r.field}: ${sets.error}`);
+    } else notes.push(t("Couldn't look for permission sets that grant {what}: {error}", { what: r.field, error: sets.error }));
     add(ownSets.length
-      ? { problem: "field", kind: "edit", title: `Or give read on ${r.field} in ${ownSets[0].label}`, detail: "They already have this permission set. Everyone else assigned to it gets the same access.", url: setupUrl(host, "permset", ownSets[0].id) }
-      : { problem: "field", kind: "edit", title: `Or create a permission set with read on ${r.field}`, detail: "They have no custom permission sets yet, only their profile.", url: null });
+      ? { problem: "field", kind: "edit", title: t("Or give read on {field} in {label}", { field: r.field, label: ownSets[0].label }), detail: t("They already have this permission set. Everyone else assigned to it gets the same access."), url: setupUrl(host, "permset", ownSets[0].id) }
+      : { problem: "field", kind: "edit", title: t("Or create a permission set with read on {what}", { what: r.field }), detail: t("They have no custom permission sets yet, only their profile."), url: null });
   }
 
   // Field not on their page.
   if (r.screen?.status === "no") {
     const sl = { layouts: lightningBase(host) ? `${lightningBase(host)}/lightning/setup/ObjectManager/${encodeURIComponent(r.sobject)}/PageLayouts/view` : null };
     if (r.screen.layout) {
-      add({ problem: "screen", kind: "layout", title: `Add ${r.field} to the ${r.screen.layout.name} page layout`, detail: "It's the layout their profile gets for this record type. Everyone using that layout will see the field.", url: r.screen.layout.url });
+      add({ problem: "screen", kind: "layout", title: t("Add {field} to the {layout} page layout", { field: r.field, layout: r.screen.layout.name }), detail: t("It's the layout their profile gets for this record type. Everyone using that layout will see the field."), url: r.screen.layout.url });
     }
-    add({ problem: "screen", kind: "layout", title: "Or assign their profile a page layout that already has it", detail: "Use Page Layout Assignment on this object.", url: sl.layouts });
+    add({ problem: "screen", kind: "layout", title: t("Or assign their profile a page layout that already has it"), detail: t("Use Page Layout Assignment on this object."), url: sl.layouts });
     for (const p of (r.screen.pages ?? []).filter((x) => x.usesDynamicForms && !x.hasField).slice(0, 2)) {
-      add({ problem: "screen", kind: "page", title: `Also add it to the ${p.name} Lightning page`, detail: "This page uses Dynamic Forms, so it ignores the page layout's fields.", url: p.url });
+      add({ problem: "screen", kind: "page", title: t("Also add it to the {page} Lightning page", { page: p.name }), detail: t("This page uses Dynamic Forms, so it ignores the page layout's fields."), url: p.url });
     }
   }
 
   // Record sharing.
   if (r.record?.status === "no") {
-    add({ problem: "record", kind: "share", title: "Share this record with them", detail: "Use Sharing on the record. Quickest for one record; it doesn't cover similar records.",
+    add({ problem: "record", kind: "share", title: t("Share this record with them"), detail: t("Use Sharing on the record. Quickest for one record; it doesn't cover similar records."),
       url: r.recordId ? setupUrl(host, "record", r.recordId) : null });
     if (!user.roleId) {
-      add({ problem: "record", kind: "role", title: "Give them a role", detail: "They have no role, so role hierarchy and role-based sharing rules can't reach them.", url: setupUrl(host, "user", user.id) });
+      add({ problem: "record", kind: "role", title: t("Give them a role"), detail: t("They have no role, so role hierarchy and role-based sharing rules can't reach them."), url: setupUrl(host, "user", user.id) });
     }
-    add({ problem: "record", kind: "rule", title: `For all similar records, add a sharing rule on ${r.sobject}`, detail: "Share by owner or by criteria with a public group or role they belong to.", url: setupUrl(host, "sharing") });
+    add({ problem: "record", kind: "rule", title: t("For all similar records, add a sharing rule on {sobject}", { sobject: r.sobject }), detail: t("Share by owner or by criteria with a public group or role they belong to."), url: setupUrl(host, "sharing") });
     if (r.record.owd?.model === "ControlledByParent") {
-      notes.push("This record inherits access from its parent record: fixing access to the parent fixes this one.");
+      notes.push(t("This record inherits access from its parent record: fixing access to the parent fixes this one."));
     }
   }
 
@@ -154,7 +158,7 @@ export async function suggestFixes(client, { result, src }) {
   out.sort((a, b) => ORDER.indexOf(a.problem) - ORDER.indexOf(b.problem));
   for (const p of ORDER) {
     const first = out.find((x) => x.problem === p);
-    if (first) first.title = first.title.replace(/^Or (.)/, (_, c) => c.toUpperCase());
+    if (first) first.title = first.title.replace(/^(?:Or|O) (.)/, (_, c) => c.toUpperCase());
   }
   return { suggestions: out, notes };
 }

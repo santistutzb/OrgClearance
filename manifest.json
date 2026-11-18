@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OrgClearance (dev)",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Salesforce access diagnosis, permission audit, object docs, org comparison and record history. Read-only.",
   "permissions": [
     "cookies",
@@ -48,6 +48,7 @@
         "https://*.my.salesforce-setup.com/*"
       ],
       "js": [
+        "i18n.js",
         "ui.js",
         "content.js"
       ],

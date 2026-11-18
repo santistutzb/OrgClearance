@@ -9,7 +9,11 @@
 // Record: Salesforce only checks record access one user per query (UserRecordAccess), so that part is
 // optional and capped. Above the cap we say so instead of returning a partial list as if it were complete.
 
+import "../i18n.js";
 import { queryIn } from "./api.js";
+
+const I18N = globalThis.OrgClearanceI18n;
+const t = (k, v) => I18N.t(k, v);
 
 const NAME_RE = /^[A-Za-z0-9_]+$/;
 const ID_RE = /^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$/;
@@ -20,17 +24,17 @@ async function attempt(fn) {
   catch (e) { return { ok: false, error: e.message || String(e) }; }
 }
 
-const sourceLabel = (a) => a.PermissionSet?.IsOwnedByProfile ? `Profile: ${a.PermissionSet.Profile?.Name ?? "?"}`
-  : a.PermissionSetGroup?.MasterLabel ? `Group: ${a.PermissionSetGroup.MasterLabel}` : `Permission set: ${a.PermissionSet?.Label ?? "?"}`;
+const sourceLabel = (a) => a.PermissionSet?.IsOwnedByProfile ? t("Profile: {name}", { name: a.PermissionSet.Profile?.Name ?? "?" })
+  : a.PermissionSetGroup?.MasterLabel ? t("Group: {name}", { name: a.PermissionSetGroup.MasterLabel }) : t("Permission set: {name}", { name: a.PermissionSet?.Label ?? "?" });
 
 /**
  * @param {any} client
  * @param {{sobject: string, field?: string|null, recordId?: string|null, checkRecord?: boolean, limit?: number, now?: number}} p
  */
 export async function whoCanSee(client, { sobject, field = null, recordId = null, checkRecord = false, limit = RECORD_CHECK_LIMIT, now = Date.now() }) {
-  if (!NAME_RE.test(sobject || "")) throw new Error("Invalid object");
-  if (field && !NAME_RE.test(field)) throw new Error("Invalid field");
-  if (recordId && !ID_RE.test(recordId)) throw new Error("Invalid record");
+  if (!NAME_RE.test(sobject || "")) throw new Error(t("Invalid {what}", { what: t("object") }));
+  if (field && !NAME_RE.test(field)) throw new Error(t("Invalid {what}", { what: t("field") }));
+  if (recordId && !ID_RE.test(recordId)) throw new Error(t("Invalid {what}", { what: t("record") }));
   const notes = [];
 
   // Field-level security applies only to "permissionable" fields.
@@ -39,10 +43,10 @@ export async function whoCanSee(client, { sobject, field = null, recordId = null
   if (field) {
     const desc = await client.describe(sobject);
     const meta = desc.fields.find((f) => f.name.toLowerCase() === field.toLowerCase());
-    if (!meta) throw new Error(`Field ${field} doesn't exist on ${sobject} (or you can't see it).`);
+    if (!meta) throw new Error(t("Field {field} doesn't exist on {sobject} (or you can't see it).", { field, sobject }));
     fieldName = meta.name;
     fls = meta.permissionable !== false;
-    if (!fls) notes.push(`${fieldName} isn't controlled by field-level security: everyone who can read ${sobject} can read it.`);
+    if (!fls) notes.push(t("{field} isn't controlled by field-level security: everyone who can read {sobject} can read it.", { field: fieldName, sobject }));
   }
 
   // 1. Permission sources that grant what's needed.
@@ -53,7 +57,7 @@ export async function whoCanSee(client, { sobject, field = null, recordId = null
   ]);
   const objectGrant = new Set(objRows.map((r) => r.ParentId));
   const viewAllData = new Set(vadRows.ok ? vadRows.value.map((r) => r.Id) : []);
-  if (!vadRows.ok) notes.push(`Couldn't check View All Data: ${vadRows.error}`);
+  if (!vadRows.ok) notes.push(t("Couldn't check View All Data: {error}", { error: vadRows.error }));
   const fieldGrant = new Set(fieldRows.map((r) => r.ParentId));
 
   // 2. Who has those sources assigned.
@@ -72,7 +76,7 @@ export async function whoCanSee(client, { sobject, field = null, recordId = null
     };
     const label = sourceLabel(a);
     if (objectGrant.has(a.PermissionSetId)) u.objectVia.push(label);
-    else if (viewAllData.has(a.PermissionSetId)) u.objectVia.push(`${label} (View All Data)`);
+    else if (viewAllData.has(a.PermissionSetId)) u.objectVia.push(t("{source} (View All Data)", { source: label }));
     if (fieldGrant.has(a.PermissionSetId)) u.fieldVia.push(label);
     users.set(a.AssigneeId, u);
   }
@@ -86,7 +90,7 @@ export async function whoCanSee(client, { sobject, field = null, recordId = null
   if (recordId && checkRecord) {
     if (list.length > limit) {
       record = { status: "too-many", candidates: list.length, limit };
-      notes.push(`${list.length} people can read ${sobject}${fls ? ` and ${fieldName}` : ""}. Checking this record one person at a time is capped at ${limit}, so record access wasn't checked.`);
+      notes.push(t(fls ? "{n} people can read {sobject} and {field}. Checking this record one person at a time is capped at {limit}, so record access wasn't checked." : "{n} people can read {sobject}. Checking this record one person at a time is capped at {limit}, so record access wasn't checked.", { n: list.length, sobject, field: fieldName, limit }));
     } else {
       let failed = 0;
       for (const u of list) {
@@ -98,7 +102,7 @@ export async function whoCanSee(client, { sobject, field = null, recordId = null
       const before = list.length;
       list = list.filter((u) => u.recordAccess !== "None");
       record = { status: "checked", checked: before, withAccess: list.filter((u) => u.recordAccess).length, failed };
-      if (failed) notes.push(`Record access couldn't be verified for ${failed} ${failed === 1 ? "person" : "people"}; they're still listed.`);
+      if (failed) notes.push(I18N.tn(failed, "Record access couldn't be verified for {n} person; they're still listed.", "Record access couldn't be verified for {n} people; they're still listed."));
     }
   }
 
