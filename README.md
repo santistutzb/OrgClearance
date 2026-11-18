@@ -123,6 +123,7 @@ Authorization code flow with PKCE, no client secret. The access token is kept in
 | `workspace.html/js` | Workspace page. |
 | `options.html/js` | Settings: auth mode per org, OAuth setup. |
 | `background.js` | Service worker. The only place that holds credentials and calls the API. Pages never see a session id or token. Workspace requests can only target orgs the user is logged into or has configured. |
+| `src/hosts.js` | Allowlist of Salesforce domains that credentials may be sent to. |
 | `src/resolve.js` | Picks the org and credentials (cookie or OAuth) for each request. |
 | `src/auth.js` | Per-org auth settings and OAuth (PKCE). |
 | `src/user.js` | User overview. |
@@ -140,7 +141,7 @@ Authorization code flow with PKCE, no client secret. The access token is kept in
 
 ## Status: not yet tested against a real org
 
-The logic passes 69 tests against simulated data, 2 UI tests render every tab with all sections expanded and fail on broken text, the code type-checks clean, and the panel, workspace and settings were smoke-tested in a simulated DOM,
+The logic passes 77 tests against simulated data (8 of them security regressions), 2 UI tests render every tab with all sections expanded and fail on broken text, the code type-checks clean, and the panel, workspace and settings were smoke-tested in a simulated DOM,
 but **it hasn't run against Salesforce yet**. Validate in a Developer Org first. Things to watch:
 
 - `session.js` finding the cookie on your domain type (sandbox, Developer Edition, Enhanced Domains).
@@ -163,6 +164,10 @@ but **it hasn't run against Salesforce yet**. Validate in a Developer Org first.
 - [ ] Setup links assume Lightning and My Domain hosts; flow links need `FlowDefinitionView.ActiveVersionId` (falls back to the Flows list).
 - [ ] Full TypeScript conversion (today: JSDoc + `tsc --checkJs`, no build step).
 - [ ] Naming: Salesforce's trademark guidelines don't allow its marks ("Salesforce", "force", "Cloud"...) inside a product name; "for Salesforce" may only appear as a less prominent description.
+
+## Security and privacy
+
+Read-only, no server, no analytics, credentials kept in the service worker, network limited to Salesforce by CSP and an allowlist, OAuth with PKCE and no secrets. Details in [SECURITY.md](SECURITY.md) (including how to report a vulnerability privately) and [PRIVACY.md](PRIVACY.md).
 
 ## License
 

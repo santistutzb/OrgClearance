@@ -45,7 +45,15 @@
     .iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--muted); }
     .iconbtn:hover { background: var(--wash); color: var(--ink); }
     .ctx { display: flex; align-items: center; gap: 6px; margin: 10px 0 12px; font-size: 13px; color: var(--muted); min-height: 20px; }
-    .ctx b { color: var(--ink); }
+    .record { min-width: 0; flex: 1; }
+    .rname { font-size: 16px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rmeta { display: flex; align-items: center; gap: 8px; margin-top: 3px; flex-wrap: wrap; }
+    .otype { background: var(--brand-soft); color: var(--brand); font-weight: 700; font-size: 12px; padding: 1px 8px; border-radius: 999px; }
+    .rid { letter-spacing: .02em; }
+    .iconbtn.small { width: 24px; height: 24px; border-radius: 6px; }
+    .iconbtn.small .ic { width: 14px; height: 14px; vertical-align: 0; }
+    .iconbtn.done { color: var(--yes); }
+    .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     .panel-body { padding: 14px 16px 18px; overflow: auto; }
     .holders { display: flex; gap: 10px; margin-top: 18px; }
     .holders > div { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: var(--r-card); padding: 12px; }
@@ -445,11 +453,12 @@
     }
     if (state.ctx && ctx.recordId === state.ctx.recordId) return;
     state.ctx = null;
-    ctxEl.replaceChildren(h("span", { class: "spinner" }), "Reading this record…");
+    ctxEl.replaceChildren(h("span", { class: "spinner" }), h("span", {}, "Reading this record…"));
     try {
-      if (!ctx.sobject) ctx.sobject = await send({ type: "resolveObject", recordId: ctx.recordId });
+      const info = await send({ type: "recordContext", recordId: ctx.recordId, sobject: ctx.sobject });
+      ctx.sobject = info.sobject;
       state.ctx = ctx;
-      ctxEl.replaceChildren("Checking ", h("b", {}, ctx.sobject), h("span", { class: "api" }, ctx.recordId));
+      ctxEl.replaceChildren(recordHeader(info));
       const fields = await send({ type: "listFields", sobject: ctx.sobject });
       fieldList.replaceChildren(...fields.map((f) => h("option", { value: f.name, label: f.label })));
       ex.out.replaceChildren(explainEmpty());
@@ -464,6 +473,19 @@
     }
     refreshButtons();
   }
+  // Which record the panel is looking at: its name, its object, and the Id with a copy button.
+  function recordHeader(info) {
+    const copyLabel = h("span", { class: "sr" }, "Copy record Id");
+    const copy = h("button", { class: "iconbtn small", title: "Copy record Id", onclick: async () => {
+      try { await navigator.clipboard.writeText(info.recordId); copy.classList.add("done"); setTimeout(() => copy.classList.remove("done"), 1500); } catch { /* clipboard blocked */ }
+    } }, icon("copy"), copyLabel);
+    return h("div", { class: "record" },
+      h("div", { class: "rname", title: info.title ?? info.label }, info.title ?? `${info.label} record`),
+      h("div", { class: "rmeta" }, h("span", { class: "otype" }, info.label),
+        info.label !== info.sobject ? h("span", { class: "api muted" }, info.sobject) : null,
+        h("span", { class: "api muted rid" }, info.recordId), copy));
+  }
+
   function refreshButtons() {
     [ex.picker, fm.picker, cp.a].forEach((p) => p.onChange());
     hi.btn.disabled = hi.logsBtn.disabled = wh.btn.disabled = !state.ctx;

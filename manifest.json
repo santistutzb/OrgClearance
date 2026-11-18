@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OrgClearance (dev)",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Salesforce access diagnosis, permission audit, object docs, org comparison and record history. Read-only.",
   "permissions": [
     "cookies",
@@ -71,5 +71,9 @@
         "https://*.my.salesforce-setup.com/*"
       ]
     }
-  ]
+  ],
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://*.salesforce.com https://*.force.com https://*.salesforce-setup.com; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+  },
+  "minimum_chrome_version": "116"
 }

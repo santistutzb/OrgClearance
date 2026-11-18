@@ -493,3 +493,18 @@ export async function resolveObject(client, recordId) {
   if (!hit) throw new Error("Couldn't identify this record's object.");
   return hit.name;
 }
+
+// Header of the panel: the record's object label and its name (Name, CaseNumber, Subject...).
+// If the name can't be read, the panel still shows the object and the Id.
+export async function recordContext(client, { recordId, sobject = null }) {
+  assertId(recordId, "record");
+  const name = sobject ? assertName(sobject, "object") : await resolveObject(client, recordId);
+  const desc = await client.describe(name);
+  const nameField = desc.fields.find((f) => f.nameField)?.name ?? null;
+  let title = null;
+  if (nameField) {
+    const row = await attempt(() => client.query(`SELECT ${nameField} FROM ${name} WHERE Id = '${recordId}'`));
+    if (row.ok && row.value[0]) title = row.value[0][nameField] ?? null;
+  }
+  return { sobject: name, label: desc.label ?? name, title: title == null ? null : String(title), recordId };
+}

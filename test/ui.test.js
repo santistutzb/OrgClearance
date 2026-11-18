@@ -43,6 +43,9 @@ test("panel: every tab renders clean text with all sections expanded", async () 
   w.eval(read("content.js"));
   const r = shadow();
   r.querySelector(".fab").click(); await tick();
+  assert.equal(r.querySelector(".rname").textContent, "Acme Retail Group", "record header shows the record name");
+  assert.equal(r.querySelector(".otype").textContent, "Account");
+  assert.equal(r.querySelector(".rid").textContent, "001000000000001AAA");
   const views = () => [...r.querySelectorAll(".panel-body > div")];
   const visible = () => views().find((v) => !v.hidden);
   const tab = (name) => [...r.querySelectorAll(".tabs button")].find((b) => b.dataset.name === name).click();
