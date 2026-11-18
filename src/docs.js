@@ -129,7 +129,16 @@ export async function collectObjectDoc(client, sobject) {
 
 // ---------- rendering ----------
 
-const mmd = (s) => String(s).replace(/"/g, "'").replace(/[<>]/g, "");
+// Diagram labels come from org metadata. Keep letters, numbers and plain punctuation only, so nothing in a
+// flow or rule name can become markup or a Mermaid entity code (like #60; for "<") in the rendered page.
+export const mmd = (s) => String(s).replace(/[^\p{L}\p{N} .,:()'/+_-]/gu, " ").replace(/\s+/g, " ").trim();
+
+// Exported HTML draws the diagram with a pinned Mermaid build. The SRI hash makes the browser refuse the
+// script if the CDN copy is ever altered. Update both together (npm pack mermaid@<v>; sha384 of dist/mermaid.min.js).
+export const MERMAID = {
+  src: "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js",
+  integrity: "sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2",
+};
 const isUrl = (u) => typeof u === "string" && /^https:\/\/[^\s"'<>]+$/.test(u);
 
 // Simplified save order of execution, showing only steps this object actually has.
@@ -260,6 +269,7 @@ a{color:#0b5cab}code{font-family:ui-monospace,monospace}pre.mermaid{background:#
 <h2>Record types</h2>${t("recordTypes")}
 <h2>Fields</h2>${t("fields")}
 ${doc.notes.length ? `<h2>Notes</h2><ul>${doc.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
-<script type="module">try{const m=await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs");m.default.initialize({startOnLoad:false,securityLevel:"loose"});await m.default.run();}catch(e){}</script>
+<script src="${MERMAID.src}" integrity="${MERMAID.integrity}" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>try{mermaid.initialize({startOnLoad:true,securityLevel:"antiscript"});}catch(e){}</script>
 </body></html>`;
 }

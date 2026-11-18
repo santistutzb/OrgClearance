@@ -4,6 +4,7 @@ const ana = { id: "005A", name: "Ana Ruiz", username: "ana.ruiz@acme.com", isAct
 const bob = { id: "005B", name: "Bruno Pérez", username: "bruno.perez@acme.com", isActive: true, profileName: "Sales User", roleName: "Sales Manager" };
 const R = {
   resolveObject: "Account",
+  recordContext: { sobject: "Account", label: "Account", title: "Acme Retail Group", recordId: "001000000000001AAA" },
   listFields: [{ name: "Industry", label: "Industry" }, { name: "AnnualRevenue", label: "Annual Revenue" }],
   searchUsers: [ana, bob, { id: "005C", name: "Ana Torres", username: "atorres@acme.com", isActive: false, profileName: "Support", roleName: null }],
   explain: (m) => m.params.userId === "005A" ? {

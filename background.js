@@ -3,9 +3,10 @@
 // Pages (panel, workspace, options) send messages; they never see a session id or token.
 
 import { createClient } from "./src/api.js";
+import { isSalesforceHost } from "./src/hosts.js";
 import { resolveSession, listKnownOrgs, forgetOAuthToken, isAuthError, isApiBlocked } from "./src/resolve.js";
 import { orgIdOf, getSession } from "./src/session.js";
-import { searchUsers, explainAccess, compareUsers, fieldMatrix, resolveObject } from "./src/access.js";
+import { searchUsers, explainAccess, compareUsers, fieldMatrix, resolveObject, recordContext } from "./src/access.js";
 import { userOverview } from "./src/user.js";
 import { whoCanSee } from "./src/who.js";
 import { formatTicket, problemGroups } from "./src/ticket.js";
@@ -23,6 +24,7 @@ const handlers = {
   compare: { pages: "panel", run: (c, m) => compareUsers(c, m.params) },
   fieldMatrix: { pages: "panel", run: (c, m) => fieldMatrix(c, m.params) },
   resolveObject: { pages: "panel", run: (c, m) => resolveObject(c, m.recordId) },
+  recordContext: { pages: "panel", run: (c, m) => recordContext(c, { recordId: m.recordId, sobject: m.sobject ?? null }) },
   timeline: { pages: "panel", run: (c, m) => buildTimeline(c, m.params) },
   whoCanSee: { pages: "panel", run: (c, m) => whoCanSee(c, m.params) },
   scanLogs: { pages: "panel", run: (c, m) => scanLogs(c, m.params) },
@@ -87,7 +89,7 @@ const local = {
     return orgs.map((o) => ({ ...o, current: !!current && o.orgId === current }));
   },
   openWorkspace: async (m, sender) => {
-    let org = m.org ?? null;
+    let org = typeof m.org === "string" && isSalesforceHost(m.org) ? m.org : null;
     if (!org && sender.tab?.url) {
       try { org = (await getSession(new URL(sender.tab.url).hostname)).host; } catch { /* pick in the workspace */ }
     }

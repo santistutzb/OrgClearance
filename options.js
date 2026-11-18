@@ -98,12 +98,33 @@ async function render() {
         h("label", { for: "oc-key" }, "Consumer Key"), keyInput,
         formErr, save)),
 
+    privacyCard(),
+
     h("section", { class: "card" },
       h("h2", {}, "Keyboard shortcuts"),
       h("p", {}, h("kbd", {}, "Alt"), " + ", h("kbd", {}, "Shift"), " + ", h("kbd", {}, "A"), " opens or closes the panel on a Salesforce page."),
       h("p", {}, h("kbd", {}, "Alt"), " + ", h("kbd", {}, "Shift"), " + ", h("kbd", {}, "W"), " opens the workspace."),
       h("p", { class: "muted small" }, "You can change them at chrome://extensions/shortcuts.")),
   ));
+}
+
+// What the extension keeps on this computer, and a way to clear it.
+function privacyCard() {
+  const status = h("div", { class: "muted small", role: "status" });
+  const forget = h("button", { class: "btn btn-secondary btn-small", onclick: async () => {
+    const all = await chrome.storage.local.get(null);
+    const keys = Object.keys(all).filter((k) => k.startsWith("recent:"));
+    await chrome.storage.local.remove(keys);
+    status.textContent = keys.length ? "Recent people cleared." : "There was nothing to clear.";
+  } }, "Forget recent people");
+  return h("section", { class: "card" },
+    h("h2", {}, "Your data"),
+    h("p", {}, "OrgClearance has no server and sends nothing outside Salesforce. On this computer it only keeps:"),
+    h("ul", {},
+      h("li", {}, "The last 8 people you looked up in each org (name, username, profile), to show them as shortcuts."),
+      h("li", {}, "How each org connects (browser session or OAuth, and the Consumer Key you pasted)."),
+      h("li", {}, "An OAuth sign-in, only until you close the browser.")),
+    h("div", { class: "row" }, forget, status));
 }
 
 document.head.append(h("style", {}, fontFaceCss("") + CSS + PAGE_CSS));

@@ -8,7 +8,7 @@
 // (cleared when the browser closes) and no refresh token is requested.
 
 const CONFIG_KEY = "orgConfigs";
-const HOST_RE = /^[a-z0-9.-]+\.(salesforce\.com|force\.com|salesforce-setup\.com|cloudforce\.com|salesforce\.mil)$/i;
+import { isSalesforceHost } from "./hosts.js";
 
 /** @typedef {{mode: "cookie" | "oauth", clientId?: string}} OrgConfig */
 
@@ -20,7 +20,7 @@ export function normalizeHost(input) {
   host = host.replace(/\/.*$/, "").toLowerCase()
     .replace(".lightning.force.com", ".my.salesforce.com")
     .replace(".my.salesforce-setup.com", ".my.salesforce.com");
-  if (!HOST_RE.test(host)) throw new Error("That doesn't look like a Salesforce My Domain URL (e.g. https://acme.my.salesforce.com).");
+  if (!isSalesforceHost(host)) throw new Error("That doesn't look like a Salesforce My Domain URL (e.g. https://acme.my.salesforce.com).");
   return host;
 }
 
@@ -127,7 +127,11 @@ export async function getOAuthSession(host, { interactive = true, fetchImpl } = 
   if (!res.ok || !body.access_token) {
     throw new Error(`Token request failed: ${body.error_description || body.error || `HTTP ${res.status}`}. Check the Consumer Key, callback URL and that "Require Secret for Web Server Flow" is off.`);
   }
-  const session = { host: new URL(body.instance_url).hostname, sid: body.access_token };
+  // The API host comes from Salesforce's response; only accept a Salesforce domain.
+  let instanceHost = "";
+  try { instanceHost = new URL(body.instance_url).hostname; } catch { /* invalid URL */ }
+  if (!isSalesforceHost(instanceHost)) throw new Error("Salesforce returned an unexpected instance URL. Login aborted.");
+  const session = { host: instanceHost, sid: body.access_token };
   await chrome.storage.session.set({ [tokenKey(host)]: session });
   return session;
 }

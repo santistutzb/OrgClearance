@@ -282,7 +282,12 @@
     container.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
-  const csvCell = (v) => /[",\n\r]/.test(String(v ?? "")) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? "");
+  // Org data goes into CSVs; a value starting with = + - @ (or a tab/CR) would run as a spreadsheet formula.
+  const csvCell = (v) => {
+    let s = String(v ?? "");
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
   const toCsv = (cols, rows) => [cols, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
   const stamp = () => new Date().toISOString().slice(0, 10);
 

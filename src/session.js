@@ -2,7 +2,10 @@
 // Finds the Salesforce session the user already has open.
 // No login of its own: it reads the `sid` cookie from the org's API domain.
 
-const API_COOKIE_DOMAINS = ["salesforce.com", "cloudforce.com", "salesforce.mil"];
+import { isSalesforceHost } from "./hosts.js";
+
+// API session cookies live on *.my.salesforce.com (and older *.salesforce.com instance hosts).
+const API_COOKIE_DOMAINS = ["salesforce.com"];
 
 export function guessApiHost(pageHost) {
   return pageHost
@@ -11,7 +14,7 @@ export function guessApiHost(pageHost) {
 }
 
 export async function getSession(pageHost) {
-  if (!/^[a-z0-9.-]+$/i.test(pageHost)) throw new Error("Invalid host");
+  if (!isSalesforceHost(pageHost)) throw new Error("Not a Salesforce page.");
 
   const pageCookie = await chrome.cookies.get({ url: `https://${pageHost}`, name: "sid" });
   if (pageCookie && pageHost.endsWith(".my.salesforce.com")) {
@@ -45,7 +48,7 @@ export async function listOrgSessions() {
     for (const c of cookies) {
       const orgId = c.value.split("!")[0];
       const host = c.domain.replace(/^\./, "");
-      if (!/^00D[a-zA-Z0-9]{12,15}$/.test(orgId) || !/^[a-z0-9.-]+$/i.test(host)) continue;
+      if (!/^00D[a-zA-Z0-9]{12,15}$/.test(orgId) || !isSalesforceHost(host)) continue;
       // Prefer My Domain hosts over generic ones (e.g. login.salesforce.com).
       if (!byOrg.has(orgId) || host.includes(".my.")) byOrg.set(orgId, { orgId, host, sid: c.value });
     }

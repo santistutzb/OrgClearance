@@ -2,6 +2,8 @@
 // Minimal Salesforce REST API client. GET only.
 // Counts the API calls each action makes and reads the org's daily usage from the response header.
 
+import { assertSalesforceHost } from "./hosts.js";
+
 export const API_VERSION = "62.0";
 
 const DESCRIBE_TTL_MS = 10 * 60 * 1000;
@@ -24,6 +26,8 @@ export class ApiError extends Error {
  * @param {{fetchImpl?: typeof fetch, now?: () => number}} [opts]
  */
 export function createClient({ host, sid }, { fetchImpl, now = Date.now } = {}) {
+  // Never send credentials anywhere but Salesforce, whatever produced the host.
+  assertSalesforceHost(host);
   const doFetch = fetchImpl ?? ((...args) => fetch(...args));
   const base = `https://${host}`;
   const data = `/services/data/v${API_VERSION}`;
