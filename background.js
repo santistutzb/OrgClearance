@@ -7,6 +7,7 @@ import { resolveSession, listKnownOrgs, forgetOAuthToken, isAuthError, isApiBloc
 import { orgIdOf, getSession } from "./src/session.js";
 import { searchUsers, explainAccess, compareUsers, fieldMatrix, resolveObject } from "./src/access.js";
 import { userOverview } from "./src/user.js";
+import { whoCanSee } from "./src/who.js";
 import { formatTicket, problemGroups } from "./src/ticket.js";
 import { runAudit } from "./src/audit.js";
 import { collectObjectDoc, toMarkdown, toHtml, toMermaid } from "./src/docs.js";
@@ -23,6 +24,7 @@ const handlers = {
   fieldMatrix: { pages: "panel", run: (c, m) => fieldMatrix(c, m.params) },
   resolveObject: { pages: "panel", run: (c, m) => resolveObject(c, m.recordId) },
   timeline: { pages: "panel", run: (c, m) => buildTimeline(c, m.params) },
+  whoCanSee: { pages: "panel", run: (c, m) => whoCanSee(c, m.params) },
   scanLogs: { pages: "panel", run: (c, m) => scanLogs(c, m.params) },
   listFields: {
     pages: "any",

@@ -59,6 +59,13 @@ const R = {
       { check: "Record", a: "no", b: "yes", explanation: "Bruno Pérez: Role Sales Manager is above the owner's role (Sales Rep East)." }],
     onlyA: [{ kind: "permset", label: "Lightning Console" }], onlyB: [{ kind: "permset", label: "Revenue Fields" }], common: [{ kind: "profile", label: "Sales User" }],
   }),
+  whoCanSee: (m) => ({ sobject: "Account", field: m.params.field || null, recordId: "001000000000001AAA", total: 3,
+    record: m.params.checkRecord ? { status: "checked", checked: 4, withAccess: 3, failed: 0 } : { status: "skipped" },
+    users: [
+      { id: "005B", name: "Bruno Pérez", username: "bruno.perez@acme.com", profileName: "Sales User", userType: "Standard", objectVia: ["Profile: Sales User"], fieldVia: ["Permission set: Revenue Fields"], recordAccess: m.params.checkRecord ? "Read" : undefined },
+      { id: "005C", name: "Carla Owens", username: "carla@acme.com", profileName: "Support", userType: "Standard", objectVia: ["Profile: Support"], fieldVia: ["Group: Finance Bundle"], recordAccess: m.params.checkRecord ? "Edit" : undefined },
+      { id: "005D", name: "Dario Admin", username: "dario@acme.com", profileName: "Minimum Access", userType: "Standard", objectVia: ["Permission set: Admin Tools (View All Data)"], fieldVia: ["Permission set: Revenue Fields"], recordAccess: m.params.checkRecord ? "All" : undefined }],
+    notes: [] }),
   timeline: { events: [
     { at: "2026-11-16T14:20:00Z", who: "Bruno Pérez", kind: "field", text: "Rating: Warm → Hot" },
     { at: "2026-11-12T10:05:00Z", who: "Ana Ruiz", kind: "activity", text: "Call: Pricing follow-up [Completed]" },

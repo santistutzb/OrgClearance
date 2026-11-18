@@ -79,6 +79,16 @@ test("panel: every tab renders clean text with all sections expanded", async () 
   assert.ok(visible().querySelector(".diffs"));
   assert.deepEqual(badText(visible()), [], "Compare");
 
+  tab("Who");
+  visible().querySelector("input[list]").value = "AnnualRevenue";
+  visible().querySelector("input[type=checkbox]").checked = true;
+  visible().querySelector(".btn-primary").click(); await tick();
+  assert.equal(visible().querySelectorAll(".people li").length, 3);
+  assert.match(visible().querySelector(".summary").textContent, /3people can see the AnnualRevenue field and this record\./);
+  const whoFilter = visible().querySelector("input[type=search]"); whoFilter.value = "carla"; whoFilter.dispatchEvent(new w.Event("input"));
+  assert.equal(visible().querySelectorAll(".people li").length, 1, "filter narrows the list");
+  assert.deepEqual(badText(visible()), [], "Who");
+
   tab("History");
   visible().querySelector(".btn-primary").click(); visible().querySelector(".btn-secondary").click(); await tick(200);
   assert.ok(visible().querySelectorAll(".timeline li").length > 0);
